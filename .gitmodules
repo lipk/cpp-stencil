@@ -1,0 +1,6 @@
+[submodule "dep/catch"]
+	path = dep/catch
+	url = https://github.com/catchorg/Catch2
+[submodule "dep/typelist"]
+	path = dep/typelist
+	url = https://github.com/lipk/cpp-typelist
