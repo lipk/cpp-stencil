@@ -69,7 +69,7 @@ class buffer
             }
             curr[0] = from[0];
             acc.set_middle(m_data + _compute_index(curr, offset));
-            for (; curr[0] < to[0]; ++curr[0], acc.step()) {
+            for (; curr[0] < to[0]; ++curr[0], acc.step(1)) {
                 func(curr, acc);
             }
         });
@@ -152,7 +152,7 @@ public:
             : m_offset_table(_init_offset_table(buffer_stride))
         {}
 
-        void step() { m_middle++; }
+        void step(u64 n) { m_middle += n; }
 
         void set_middle(T* middle) { m_middle = middle; }
 
@@ -178,17 +178,32 @@ public:
     template<u32 rad, typename Func>
     inline void iterate_halo(const Func& func)
     {
-        u64 dir = 0;
         auto to = m_size;
         for (auto& i : to) {
             i += m_halo_size * 2;
         }
-        _iterate<rad, Func>(
+        _iterate<rad>(
             repeat<u64, dim>(0),
             to,
             repeat<u64, dim>(0),
-            [&](std::array<u64, 2>&, buffer<2, int>::accessor<1>& acc) {
-                // TODO: implement
+            [&](std::array<u64, dim>& it, buffer<dim, T>::accessor<rad>& acc) {
+                std::array<bool, dim> dir;
+                bool skip = true;
+                for (u32 i = 0; i < dim; ++i) {
+                    if (it[i] < m_halo_size) {
+                        dir[i] = false;
+                        skip = false;
+                    } else if (it[i] >= m_halo_size + m_size[i]) {
+                        dir[i] = true;
+                        skip = false;
+                    }
+                }
+                if (skip) {
+                    it[0] += m_size[0] - 1;
+                    acc.step(m_size[0] - 1);
+                    return;
+                }
+                func(it, acc, dir);
             });
     }
 };
