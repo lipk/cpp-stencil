@@ -33,7 +33,7 @@ constexpr inline T ipow(T base, u64 exp)
     return exp == 0 ? 1 : base * ipow(base, exp - 1);
 }
 
-template<u64 len, typename T>
+template<typename T, u64 len>
 std::array<T, len> repeat(const T& value)
 {
     std::array<T, len> res;

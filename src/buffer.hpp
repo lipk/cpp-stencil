@@ -50,12 +50,39 @@ class buffer
         return result;
     }
 
+    template<u32 rad, typename Func>
+    inline void _iterate(const Func& func,
+                         const std::array<u64, dim>& from,
+                         const std::array<u64, dim>& to)
+    {
+        accessor<rad> acc(this->m_stride);
+        std::array<u64, dim - 1> from_, to_;
+        for (u32 i = 0; i < dim - 1; ++i) {
+            from_[i] = from[i + 1];
+            to_[i] = to[i + 1];
+        }
+        loop<dim - 1>(from_, to_, [&](const std::array<u64, dim - 1>& it) {
+            std::array<u64, dim> curr;
+            for (u64 i = 1; i < dim; ++i) {
+                curr[i] = it[i - 1];
+            }
+            curr[0] = from[0];
+            acc.set_middle(this->m_data + this->_compute_index(
+                                              curr, this->m_offset_with_halo));
+            for (; curr[0] < to[0]; ++curr[0], acc.step()) {
+                auto x = this->m_data +
+                         this->_compute_index(curr, this->m_offset_with_halo);
+                func(curr, acc);
+            }
+        });
+    }
+
 public:
     buffer(const std::array<u64, dim>& size, u32 halo_size)
         : m_size(size)
         , m_halo_size(halo_size)
         , m_stride(_init_offset(size, halo_size))
-        , m_offset_with_halo(repeat<dim, u64>(halo_size))
+        , m_offset_with_halo(repeat<u64, dim>(halo_size))
         , m_data(_init_data(size, halo_size))
     {}
 
@@ -75,7 +102,7 @@ public:
 
     inline T& get_raw(const std::array<u64, dim>& coords)
     {
-        return this->m_data[this->_compute_index(coords, repeat<dim, u64>(0))];
+        return this->m_data[this->_compute_index(coords, repeat<u64, dim>(0))];
     }
 
     inline const T& get_raw(const std::array<u64, dim>& coords) const
@@ -150,26 +177,7 @@ public:
     template<u32 rad, typename Func>
     inline void iterate(const Func& func)
     {
-        accessor<rad> acc(this->m_stride);
-        std::array<u64, dim - 1> from, to;
-        from.fill(0);
-        for (u32 i = 0; i < dim - 1; ++i) {
-            to[i] = this->m_size[i];
-        }
-        loop<dim - 1>(from, to, [&](const std::array<u64, dim - 1>& it) {
-            std::array<u64, dim> curr;
-            for (u64 i = 1; i < dim; ++i) {
-                curr[i] = it[i - 1];
-            }
-            curr[0] = 0;
-            acc.set_middle(this->m_data + this->_compute_index(
-                                              curr, this->m_offset_with_halo));
-            for (; curr[0] < this->m_size[0]; ++curr[0], acc.step()) {
-                auto x = this->m_data +
-                         this->_compute_index(curr, this->m_offset_with_halo);
-                func(curr, acc);
-            }
-        });
+        this->_iterate<rad, Func>(func, repeat<u64, dim>(0), this->m_size);
     }
 };
 }
