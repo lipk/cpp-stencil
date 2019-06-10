@@ -4,7 +4,6 @@ PROJECT(stencil)
 SET(CMAKE_CXX_STANDARD 11)
 
 SET(SOURCES
-    src/buffer.cpp
     src/buffer.hpp
     src/loop.hpp
     src/util.hpp)
