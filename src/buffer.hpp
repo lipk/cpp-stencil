@@ -45,7 +45,7 @@ class buffer
     {
         u64 result = coords[0] + offset[0];
         for (u32 i = 1; i < dim; ++i) {
-            result += this->m_stride[i] * (coords[i] + offset[i]);
+            result += m_stride[i] * (coords[i] + offset[i]);
         }
         return result;
     }
@@ -56,7 +56,7 @@ class buffer
                          const std::array<u64, dim>& offset,
                          const Func& func)
     {
-        accessor<rad> acc(this->m_stride);
+        accessor<rad> acc(m_stride);
         std::array<u64, dim - 1> from_, to_;
         for (u32 i = 0; i < dim - 1; ++i) {
             from_[i] = from[i + 1];
@@ -68,7 +68,7 @@ class buffer
                 curr[i] = it[i - 1];
             }
             curr[0] = from[0];
-            acc.set_middle(this->m_data + this->_compute_index(curr, offset));
+            acc.set_middle(m_data + _compute_index(curr, offset));
             for (; curr[0] < to[0]; ++curr[0], acc.step()) {
                 func(curr, acc);
             }
@@ -84,31 +84,29 @@ public:
         , m_data(_init_data(size, halo_size))
     {}
 
-    ~buffer() { delete this->m_data; }
+    ~buffer() { delete m_data; }
 
     inline T& get(const std::array<u64, dim>& coords)
     {
-        return this
-            ->m_data[this->_compute_index(coords, this->m_offset_with_halo)];
+        return this->m_data[_compute_index(coords, m_offset_with_halo)];
     }
 
     inline const T& get(const std::array<u64, dim>& coords) const
     {
-        return this
-            ->m_data[this->_compute_index(coords, this->m_offset_with_halo)];
+        return this->m_data[_compute_index(coords, m_offset_with_halo)];
     }
 
     inline T& get_raw(const std::array<u64, dim>& coords)
     {
-        return this->m_data[this->_compute_index(coords, repeat<u64, dim>(0))];
+        return m_data[_compute_index(coords, repeat<u64, dim>(0))];
     }
 
     inline const T& get_raw(const std::array<u64, dim>& coords) const
     {
-        return this->m_data[this->_compute_index(coords, repeat<dim, u64>(0))];
+        return m_data[_compute_index(coords, repeat<dim, u64>(0))];
     }
 
-    const std::array<u64, dim>& size() const { return this->m_size; }
+    const std::array<u64, dim>& size() const { return m_size; }
 
     template<u32 rad>
     class accessor
@@ -154,40 +152,38 @@ public:
             : m_offset_table(_init_offset_table(buffer_stride))
         {}
 
-        void step() { this->m_middle++; }
+        void step() { m_middle++; }
 
-        void set_middle(T* middle) { this->m_middle = middle; }
+        void set_middle(T* middle) { m_middle = middle; }
 
     public:
         T& get(const std::array<i64, dim>& coords)
         {
-            return *(this->m_middle +
-                     this->m_offset_table[this->_compute_table_index(coords)]);
+            return *(m_middle + m_offset_table[_compute_table_index(coords)]);
         }
 
         const T& get(const std::array<i64, dim>& coords) const
         {
-            return *(this->m_middle +
-                     this->m_offset_table[this->_compute_table_index(coords)]);
+            return *(m_middle + m_offset_table[_compute_table_index(coords)]);
         }
     };
 
     template<u32 rad, typename Func>
     inline void iterate(const Func& func)
     {
-        this->_iterate<rad, Func>(
-            repeat<u64, dim>(0), this->m_size, this->m_offset_with_halo, func);
+        _iterate<rad, Func>(
+            repeat<u64, dim>(0), m_size, m_offset_with_halo, func);
     }
 
     template<u32 rad, typename Func>
     inline void iterate_halo(const Func& func)
     {
         u64 dir = 0;
-        auto to = this->m_size;
+        auto to = m_size;
         for (auto& i : to) {
-            i += this->m_halo_size * 2;
+            i += m_halo_size * 2;
         }
-        this->_iterate<rad, Func>(
+        _iterate<rad, Func>(
             repeat<u64, dim>(0),
             to,
             repeat<u64, dim>(0),
