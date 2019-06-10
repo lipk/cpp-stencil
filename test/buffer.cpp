@@ -97,4 +97,24 @@ TEST_CASE("iterate_halo", "[buffer]")
         }
     }
 }
+
+TEST_CASE("fill_halo", "[buffer]")
+{
+    buffer<2, int> buf1({ 2, 2 }, 2);
+    buf1.iterate<0>(
+        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<0>& acc) {
+            acc.get({ 0, 0 }) = 1;
+        });
+    buf1.halo_fill(2);
+    int values[6][6] = {
+        { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 1, 1, 2, 2 },
+        { 2, 2, 1, 1, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 },
+    };
+    for (u32 i = 0; i < 6; ++i) {
+        for (u32 j = 0; j < 6; ++j) {
+            INFO(i << " " << j);
+            CHECK(values[i][j] == buf1.get_raw({ i, j }));
+        }
+    }
+}
 }

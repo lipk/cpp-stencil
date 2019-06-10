@@ -50,31 +50,6 @@ class buffer
         return result;
     }
 
-    template<u32 rad, typename Func>
-    inline void _iterate(const std::array<u64, dim>& from,
-                         const std::array<u64, dim>& to,
-                         const std::array<u64, dim>& offset,
-                         const Func& func)
-    {
-        accessor<rad> acc(m_stride);
-        std::array<u64, dim - 1> from_, to_;
-        for (u32 i = 0; i < dim - 1; ++i) {
-            from_[i] = from[i + 1];
-            to_[i] = to[i + 1];
-        }
-        loop<dim - 1>(from_, to_, [&](const std::array<u64, dim - 1>& it) {
-            std::array<u64, dim> curr;
-            for (u64 i = 1; i < dim; ++i) {
-                curr[i] = it[i - 1];
-            }
-            curr[0] = from[0];
-            acc.set_middle(m_data + _compute_index(curr, offset));
-            for (; curr[0] < to[0]; ++curr[0], acc.step(1)) {
-                func(curr, acc);
-            }
-        });
-    }
-
 public:
     buffer(const std::array<u64, dim>& size, u32 halo_size)
         : m_size(size)
@@ -168,6 +143,33 @@ public:
         }
     };
 
+private:
+    template<u32 rad, typename Func>
+    inline void _iterate(const std::array<u64, dim>& from,
+                         const std::array<u64, dim>& to,
+                         const std::array<u64, dim>& offset,
+                         const Func& func)
+    {
+        accessor<rad> acc(m_stride);
+        std::array<u64, dim - 1> from_, to_;
+        for (u32 i = 0; i < dim - 1; ++i) {
+            from_[i] = from[i + 1];
+            to_[i] = to[i + 1];
+        }
+        loop<dim - 1>(from_, to_, [&](const std::array<u64, dim - 1>& it) {
+            std::array<u64, dim> curr;
+            for (u64 i = 1; i < dim; ++i) {
+                curr[i] = it[i - 1];
+            }
+            curr[0] = from[0];
+            acc.set_middle(m_data + _compute_index(curr, offset));
+            for (; curr[0] < to[0]; ++curr[0], acc.step(1)) {
+                func(curr, acc);
+            }
+        });
+    }
+
+public:
     template<u32 rad, typename Func>
     inline void iterate(const Func& func)
     {
@@ -205,6 +207,15 @@ public:
                 }
                 func(it, acc, dir);
             });
+    }
+
+    inline void halo_fill(const T& value)
+    {
+        iterate_halo<0>([&](const std::array<u64, dim>&,
+                            buffer<dim, T>::accessor<0>& acc,
+                            const std::array<bool, dim>&) {
+            acc.get(repeat<i64, dim>(0)) = value;
+        });
     }
 };
 }
