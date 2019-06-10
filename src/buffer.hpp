@@ -51,9 +51,10 @@ class buffer
     }
 
     template<u32 rad, typename Func>
-    inline void _iterate(const Func& func,
-                         const std::array<u64, dim>& from,
-                         const std::array<u64, dim>& to)
+    inline void _iterate(const std::array<u64, dim>& from,
+                         const std::array<u64, dim>& to,
+                         const std::array<u64, dim>& offset,
+                         const Func& func)
     {
         accessor<rad> acc(this->m_stride);
         std::array<u64, dim - 1> from_, to_;
@@ -67,11 +68,8 @@ class buffer
                 curr[i] = it[i - 1];
             }
             curr[0] = from[0];
-            acc.set_middle(this->m_data + this->_compute_index(
-                                              curr, this->m_offset_with_halo));
+            acc.set_middle(this->m_data + this->_compute_index(curr, offset));
             for (; curr[0] < to[0]; ++curr[0], acc.step()) {
-                auto x = this->m_data +
-                         this->_compute_index(curr, this->m_offset_with_halo);
                 func(curr, acc);
             }
         });
@@ -177,7 +175,25 @@ public:
     template<u32 rad, typename Func>
     inline void iterate(const Func& func)
     {
-        this->_iterate<rad, Func>(func, repeat<u64, dim>(0), this->m_size);
+        this->_iterate<rad, Func>(
+            repeat<u64, dim>(0), this->m_size, this->m_offset_with_halo, func);
+    }
+
+    template<u32 rad, typename Func>
+    inline void iterate_halo(const Func& func)
+    {
+        u64 dir = 0;
+        auto to = this->m_size;
+        for (auto& i : to) {
+            i += this->m_halo_size * 2;
+        }
+        this->_iterate<rad, Func>(
+            repeat<u64, dim>(0),
+            to,
+            repeat<u64, dim>(0),
+            [&](std::array<u64, 2>&, buffer<2, int>::accessor<1>& acc) {
+                // TODO: implement
+            });
     }
 };
 }
