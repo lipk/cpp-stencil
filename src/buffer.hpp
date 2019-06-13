@@ -127,17 +127,17 @@ public:
             : m_offset_table(_init_offset_table(buffer_stride))
         {}
 
-        void step(u64 n) { m_middle += n; }
+        inline void step(u64 n) { m_middle += n; }
 
-        void set_middle(T* middle) { m_middle = middle; }
+        inline void set_middle(T* middle) { m_middle = middle; }
 
     public:
-        T& get(const std::array<i64, dim>& coords)
+        inline T& get(const std::array<i64, dim>& coords)
         {
             return *(m_middle + m_offset_table[_compute_table_index(coords)]);
         }
 
-        const T& get(const std::array<i64, dim>& coords) const
+        inline const T& get(const std::array<i64, dim>& coords) const
         {
             return *(m_middle + m_offset_table[_compute_table_index(coords)]);
         }
