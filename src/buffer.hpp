@@ -150,23 +150,22 @@ private:
                          const std::array<u64, dim>& offset,
                          const Func& func)
     {
-        accessor<rad> acc(m_stride);
-        std::array<u64, dim - 1> from_, to_;
-        for (u32 i = 0; i < dim - 1; ++i) {
-            from_[i] = from[i + 1];
-            to_[i] = to[i + 1];
+        std::array<u64, dim> jumps;
+        jumps[0] = m_stride[0];
+        for (size_t i = 1; i < dim; ++i) {
+            jumps[i] = m_stride[i - 1] *
+                       (m_size[i] + 2 * m_halo_size - to[i] + from[i]);
         }
-        loop<dim - 1>(from_, to_, [&](const std::array<u64, dim - 1>& it) {
-            std::array<u64, dim> curr;
-            for (u64 i = 1; i < dim; ++i) {
-                curr[i] = it[i - 1];
-            }
-            curr[0] = from[0];
-            acc.set_middle(m_data + _compute_index(curr, offset));
-            for (; curr[0] < to[0]; ++curr[0], acc.step(1)) {
-                func(curr, acc);
-            }
-        });
+        accessor<rad> acc(m_stride);
+        loop_with_counter<dim, u64, T*, u64>(
+            from,
+            to,
+            m_data + _compute_index(from, offset),
+            jumps,
+            [&](std::array<u64, dim>& it, T* cnt) {
+                acc.set_middle(cnt);
+                func(it, acc);
+            });
     }
 
 public:
@@ -201,8 +200,7 @@ public:
                     }
                 }
                 if (skip) {
-                    it[0] += m_size[0] - 1;
-                    acc.step(m_size[0] - 1);
+                    // TODO: skip whole rows
                     return;
                 }
                 func(it, acc, dir);

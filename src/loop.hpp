@@ -13,7 +13,7 @@ struct loop_impl
                     const F& func,
                     std::array<T, n>& i)
     {
-        for (i[n - m] = from[n - m]; i[n - m] < to[n - m]; ++i[n - m]) {
+        for (i[m - 1] = from[m - 1]; i[m - 1] < to[m - 1]; ++i[m - 1]) {
             loop_impl<n, m - 1, T>::run(from, to, func, i);
         }
     }
@@ -45,33 +45,33 @@ struct loop
     }
 };
 
-template<u8 n, u8 m, typename T, typename U>
+template<u8 n, u8 m, typename T, typename C = u64, typename I = u64>
 struct loop_with_counter_impl
 {
     template<class F>
     static void run(const std::array<T, n>& from,
                     const std::array<T, n>& to,
-                    U& counter,
-                    const std::array<U, n>& increment,
+                    C& counter,
+                    const std::array<I, n>& increment,
                     const F& func,
                     std::array<T, n>& i)
     {
-        for (i[n - m] = from[n - m]; i[n - m] < to[n - m];
-             ++i[n - m], counter += increment[n - m]) {
-            loop_with_counter_impl<n, m - 1, T, U>::run(
+        for (i[m - 1] = from[m - 1]; i[m - 1] < to[m - 1];
+             ++i[m - 1], counter += increment[m - 1]) {
+            loop_with_counter_impl<n, m - 1, T, C, I>::run(
                 from, to, counter, increment, func, i);
         }
     }
 };
 
-template<u8 n, typename T, typename U>
-struct loop_with_counter_impl<n, 0, T, U>
+template<u8 n, typename T, typename C, typename I>
+struct loop_with_counter_impl<n, 0, T, C, I>
 {
     template<class F>
     static void run(const std::array<T, n>&,
                     const std::array<T, n>&,
-                    U& counter,
-                    const std::array<U, n>&,
+                    C& counter,
+                    const std::array<I, n>&,
                     const F& func,
                     std::array<T, n>& i)
     {
@@ -79,18 +79,18 @@ struct loop_with_counter_impl<n, 0, T, U>
     }
 };
 
-template<u8 n, typename T = u64, typename U = u64>
+template<u8 n, typename T = u64, typename C = u64, typename I = u64>
 struct loop_with_counter
 {
     template<typename F>
     loop_with_counter(const std::array<T, n>& from,
                       const std::array<T, n>& to,
-                      U counter,
-                      const std::array<U, n>& increment,
+                      C counter,
+                      const std::array<I, n>& increment,
                       const F& func)
     {
         std::array<T, n> i;
-        loop_with_counter_impl<n, n, T, U>::run(
+        loop_with_counter_impl<n, n, T, C, I>::run(
             from, to, counter, increment, func, i);
     }
 };
