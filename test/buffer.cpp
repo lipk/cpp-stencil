@@ -98,23 +98,70 @@ TEST_CASE("iterate_halo", "[buffer]")
     }
 }
 
-// TEST_CASE("fill_halo", "[buffer]")
-//{
-//    buffer<2, int> buf1({ 2, 2 }, 2);
-//    buf1.iterate<0>(
-//        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<0>& acc) {
-//            acc.get({ 0, 0 }) = 1;
-//        });
-//    buf1.halo_fill(2);
-//    int values[6][6] = {
-//        { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 1, 1, 2, 2 },
-//        { 2, 2, 1, 1, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 },
-//    };
-//    for (u32 i = 0; i < 6; ++i) {
-//        for (u32 j = 0; j < 6; ++j) {
-//            INFO(i << " " << j);
-//            CHECK(values[i][j] == buf1.get_raw({ i, j }));
-//        }
-//    }
-//}
+TEST_CASE("fill_halo", "[buffer]")
+{
+    buffer<2, int> buf1({ 2, 2 }, 2);
+    buf1.iterate<0>(
+        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<0>& acc) {
+            acc.get({ 0, 0 }) = 1;
+        });
+    buf1.fill_halo(2);
+    int values[6][6] = {
+        { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 1, 1, 2, 2 },
+        { 2, 2, 1, 1, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 },
+    };
+    for (u32 i = 0; i < 6; ++i) {
+        for (u32 j = 0; j < 6; ++j) {
+            INFO(i << " " << j);
+            CHECK(values[i][j] == buf1.get_raw({ i, j }));
+        }
+    }
+}
+
+TEST_CASE("copy_halo", "[buffer]")
+{
+    buffer<2, int> buf1({ 2, 2 }, 2);
+    buffer<2, int> buf2({ 2, 2 }, 2);
+    buf1.iterate<0>(
+        [&](const std::array<u64, 2>& it, buffer<2, int>::accessor<0>& acc) {
+            if (it[0] == 0) {
+                acc.get({ 0, 0 }) = 0;
+            } else {
+                acc.get({ 0, 0 }) = 1;
+            }
+        });
+    buf2.iterate<0>(
+        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<0>& acc) {
+            acc.get({ 0, 0 }) = 2;
+        });
+    buf2.fill_halo(2);
+
+    int values[6][6] = {
+        { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 },
+        { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 },
+    };
+    auto check_values = [&] {
+        for (u32 i = 0; i < 6; ++i) {
+            for (u32 j = 0; j < 6; ++j) {
+                INFO("Coordinates " << i << " " << j);
+                CHECK(values[i][j] == buf2.get_raw({ i, j }));
+            }
+        }
+    };
+    auto update_values = [&](u32 x, u32 y) {
+        values[x][y] = 0;
+        values[x][y + 1] = 0;
+        values[x + 1][y] = 1;
+        values[x + 1][y + 1] = 1;
+    };
+
+    for (i32 i = -1; i < 2; ++i) {
+        for (i32 j = -1; j < 2; ++j) {
+            INFO("Position " << i << " " << j);
+            buf2.copy_halo_from(buf1, { i, j });
+            update_values(2 * (i + 1), 2 * (j + 1));
+            check_values();
+        }
+    }
+}
 }

@@ -15,10 +15,20 @@ class buffer
     template<u32 rad>
     friend class accessor;
 
-    const std::array<u64, dim> m_size;
+    const std::array<u64, dim> m_size, m_raw_size;
     const u32 m_halo_size;
     const std::array<u64, dim> m_stride, m_offset_with_halo;
     T* const m_data;
+
+    static std::array<u64, dim> _init_raw_size(const std::array<u64, dim>& size,
+                                               u32 halo_size)
+    {
+        std::array<u64, dim> result;
+        for (u32 i = 0; i < dim; ++i) {
+            result[i] = size[i] + 2 * halo_size;
+        }
+        return result;
+    }
 
     static std::array<u64, dim> _init_offset(const std::array<u64, dim>& size,
                                              u32 halo_size)
@@ -53,6 +63,7 @@ class buffer
 public:
     buffer(const std::array<u64, dim>& size, u32 halo_size)
         : m_size(size)
+        , m_raw_size(_init_raw_size(size, halo_size))
         , m_halo_size(halo_size)
         , m_stride(_init_offset(size, halo_size))
         , m_offset_with_halo(repeat<u64, dim>(halo_size))
@@ -145,16 +156,15 @@ public:
 
 private:
     template<u32 rad, typename Func>
-    inline void _iterate(const std::array<u64, dim>& from,
-                         const std::array<u64, dim>& to,
-                         const std::array<u64, dim>& offset,
-                         const Func& func)
+    void _iterate(const std::array<u64, dim>& from,
+                  const std::array<u64, dim>& to,
+                  const std::array<u64, dim>& offset,
+                  const Func& func)
     {
         std::array<u64, dim> jumps;
         jumps[0] = m_stride[0];
         for (size_t i = 1; i < dim; ++i) {
-            jumps[i] = m_stride[i - 1] *
-                       (m_size[i] + 2 * m_halo_size - to[i] + from[i]);
+            jumps[i] = m_stride[i - 1] * (m_raw_size[i] - to[i] + from[i]);
         }
         accessor<rad> acc(m_stride);
         loop_with_counter<dim, u64, T*, u64>(
@@ -170,14 +180,14 @@ private:
 
 public:
     template<u32 rad, typename Func>
-    inline void iterate(const Func& func)
+    void iterate(const Func& func)
     {
         _iterate<rad, Func>(
             repeat<u64, dim>(0), m_size, m_offset_with_halo, func);
     }
 
     template<u32 rad, typename Func>
-    inline void iterate_halo(const Func& func)
+    void iterate_halo(const Func& func)
     {
         auto to = m_size;
         for (auto& i : to) {
@@ -207,12 +217,37 @@ public:
             });
     }
 
-    inline void halo_fill(const T& value)
+    void fill_halo(const T& value)
     {
         iterate_halo<0>([&](const std::array<u64, dim>&,
                             buffer<dim, T>::accessor<0>& acc,
                             const std::array<bool, dim>&) {
             acc.get(repeat<i64, dim>(0)) = value;
+        });
+    }
+
+    void copy_halo_from(const buffer<dim, T>& other,
+                        const std::array<i32, dim>& relpos)
+    {
+        // TODO: efficient implementation with counter loop
+        std::array<u64, dim> to, from_src, from_dst;
+        for (u32 i = 0; i < dim; ++i) {
+            if (relpos[i] < 0) {
+                to[i] = other.m_halo_size;
+                from_src[i] = other.m_size[i] - other.m_halo_size;
+                from_dst[i] = 0;
+            } else if (relpos[i] == 0) {
+                to[i] = other.m_size[i];
+                from_src[i] = 0;
+                from_dst[i] = m_halo_size;
+            } else {
+                to[i] = other.m_halo_size;
+                from_src[i] = 0;
+                from_dst[i] = m_raw_size[i] - m_halo_size;
+            }
+        }
+        loop<dim>(repeat<u64, dim>(0), to, [&](const std::array<u64, dim>& it) {
+            get_raw(from_dst + it) = other.get(from_src + it);
         });
     }
 };
