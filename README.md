@@ -32,7 +32,7 @@ template arguments: the dimensionality of the mesh, and the type of the data
 stored therein. The constructor also takes two regular arguments, the size of the
 mesh, passed in as an `std::array`, and the size of the halo.
 
-```
+```cpp
 // Creates a 400x400 (or 402x402 with halo included) array of doubles
 stencil::buffer<2, double> buf({400, 400}, 1);
 ```
@@ -41,14 +41,14 @@ To initialize the buffer, you may want to use `fill`. It sets every cell in the
 buffer, halo included, to a particular value. You can also use `fill_halo` to
 set the halo cells only.
 
-```
+```cpp
 buf.fill(0.0); // set everything to 0
 buf.fill_halo(1.0); // set halo to 1
 ```
 
 You can perform a stencil operation using iterate:
 
-```
+```cpp
 buf.iterate<1>([](const std::array<u64, 2>& it,
                   buffer<2, double>::accessor<1>& acc) {
                     acc.get({0, 0}) = some_func(it, acc);
@@ -75,7 +75,7 @@ in a reference to the other buffer and an array describing the relative position
 The function will copy the edge cells of the specified buffer into the halo
 appropriate halo cells.
 
-```
+```cpp
 // {-1, 0} means that buf2 is on the left of buf1
 buf1.copy_halo_from(buf2, {-1, 0});
 ```
