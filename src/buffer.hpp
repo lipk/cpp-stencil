@@ -189,13 +189,9 @@ public:
     template<u32 rad, typename Func>
     void iterate_halo(const Func& func)
     {
-        auto to = m_size;
-        for (auto& i : to) {
-            i += m_halo_size * 2;
-        }
         _iterate<rad>(
             repeat<u64, dim>(0),
-            to,
+            m_raw_size,
             repeat<u64, dim>(0),
             [&](std::array<u64, dim>& it, buffer<dim, T>::accessor<rad>& acc) {
                 std::array<bool, dim> dir;
@@ -224,6 +220,17 @@ public:
                             const std::array<bool, dim>&) {
             acc.get(repeat<i64, dim>(0)) = value;
         });
+    }
+
+    void fill(const T& value)
+    {
+        _iterate<0>(
+            repeat<u64, dim>(0),
+            m_raw_size,
+            repeat<u64, dim>(0),
+            [&](std::array<u64, dim>&, buffer<dim, T>::accessor<0>& acc) {
+                acc.get({ 0, 0 }) = value;
+            });
     }
 
     void copy_halo_from(const buffer<dim, T>& other,
