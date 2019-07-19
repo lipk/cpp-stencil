@@ -21,6 +21,9 @@ ADD_EXECUTABLE(run_tests ${SOURCES} ${TEST_SOURCES})
 
 FIND_PACKAGE(SDL2 REQUIRED)
 
+# FIXME: this should only be required for the demos, but none of the single-target commands work
+SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} -fopenmp)
+
 ADD_EXECUTABLE(demo_heat_dissipation ${DEMO_HEAT_DISSIPATION_SOURCES})
 INCLUDE_DIRECTORIES(demo_heat_dissipation ${SDL2_INCLUDE_DIRS})
 TARGET_LINK_LIBRARIES(demo_heat_dissipation ${SDL2_LIBRARIES})

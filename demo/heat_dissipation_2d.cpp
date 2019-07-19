@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
 #define ASSERT_SDL(expr)                                                       \
     if (!(expr)) {                                                             \
@@ -21,74 +22,70 @@ double distsq(double x1, double y1, double x2, double y2)
 
 struct simulation
 {
-    buffer<2, double> buf00, buf01, buf10, buf11;
+    std::vector<buffer<2, double>*> bufs;
     double t;
 
     simulation()
-        : buf00({ 400, 400 }, 1)
-        , buf01({ 400, 400 }, 1)
-        , buf10({ 400, 400 }, 1)
-        , buf11({ 400, 400 }, 1)
-        , t(0)
+        : t(0)
     {
-        buf00.fill(0);
-        buf01.fill(0);
-        buf10.fill(0);
-        buf11.fill(0);
+        for (size_t i = 0; i < 4; ++i) {
+            std::array<u64, 2> size = { 400, 400 };
+            bufs.push_back(new buffer<2, double>(size, 1));
+        }
     }
 
     void run_one_iteration(SDL_Renderer* renderer)
     {
-        buf00.copy_halo_from(buf10, { 1, 0 });
-        buf00.copy_halo_from(buf01, { 0, 1 });
-        buf00.copy_halo_from(buf11, { 1, 1 });
+        bufs[0]->copy_halo_from(*bufs[1], { 1, 0 });
+        bufs[0]->copy_halo_from(*bufs[2], { 0, 1 });
+        bufs[0]->copy_halo_from(*bufs[3], { 1, 1 });
 
-        buf01.copy_halo_from(buf10, { 1, -1 });
-        buf01.copy_halo_from(buf00, { 0, -1 });
-        buf01.copy_halo_from(buf11, { 1, 0 });
+        bufs[2]->copy_halo_from(*bufs[1], { 1, -1 });
+        bufs[2]->copy_halo_from(*bufs[0], { 0, -1 });
+        bufs[2]->copy_halo_from(*bufs[3], { 1, 0 });
 
-        buf10.copy_halo_from(buf00, { -1, 0 });
-        buf10.copy_halo_from(buf01, { -1, 1 });
-        buf10.copy_halo_from(buf11, { 0, 1 });
+        bufs[1]->copy_halo_from(*bufs[0], { -1, 0 });
+        bufs[1]->copy_halo_from(*bufs[2], { -1, 1 });
+        bufs[1]->copy_halo_from(*bufs[3], { 0, 1 });
 
-        buf11.copy_halo_from(buf10, { 0, -1 });
-        buf11.copy_halo_from(buf01, { -1, 0 });
-        buf11.copy_halo_from(buf00, { -1, -1 });
+        bufs[3]->copy_halo_from(*bufs[1], { 0, -1 });
+        bufs[3]->copy_halo_from(*bufs[2], { -1, 0 });
+        bufs[3]->copy_halo_from(*bufs[0], { -1, -1 });
 
         double source_x = 400 + cos(t) * 300;
         double source_y = 400 + sin(t) * 300;
 
-        u64 xoff = 0, yoff = 0;
-        auto iterate_func = [&](const std::array<u64, 2>& it,
-                                buffer<2, double>::accessor<1>& acc) {
-            if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) < 25) {
-                acc.get({ 0, 0 }) = 1.0;
-            } else {
-                acc.get({ 0, 0 }) =
-                    acc.get({ 0, 0 }) +
-                    0.1 * ((acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
-                            acc.get({ 1, 0 })) +
-                           (acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
-                            acc.get({ 0, 1 })));
-            }
-            int color = acc.get({ 0, 0 }) * 255;
-            SDL_SetRenderDrawColor(
-                renderer, color, color, color, SDL_ALPHA_OPAQUE);
-            SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
-        };
+#pragma omp parallel for
+        for (size_t i = 0; i < 4; ++i) {
+            u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
+            bufs[i]->iterate<1>([&](const std::array<u64, 2>& it,
+                                    buffer<2, double>::accessor<1>& acc) {
+                if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) <
+                    25) {
+                    acc.get({ 0, 0 }) = 1.0;
+                } else {
+                    acc.get({ 0, 0 }) =
+                        acc.get({ 0, 0 }) +
+                        0.1 * ((acc.get({ -1, 0 }) - 2 * acc.get({ 0, 0 }) +
+                                acc.get({ 1, 0 })) +
+                               (acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
+                                acc.get({ 0, 1 })));
+                }
+            });
+        }
 
-        buf00.iterate<1>(iterate_func);
-        xoff = 400;
-        yoff = 0;
-        buf10.iterate<1>(iterate_func);
-        xoff = 0;
-        yoff = 400;
-        buf01.iterate<1>(iterate_func);
-        xoff = 400;
-        yoff = 400;
-        buf11.iterate<1>(iterate_func);
+        for (size_t i = 0; i < 4; ++i) {
+            u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
+            bufs[i]->iterate<1>([&](const std::array<u64, 2>& it,
+                                    buffer<2, double>::accessor<1>& acc) {
+                int color = acc.get({ 0, 0 }) * 255;
+                SDL_SetRenderDrawColor(
+                    renderer, color, color, color, SDL_ALPHA_OPAQUE);
+                SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
+            });
+        }
 
-        t = t + .01;
+        t = t + .02;
     }
 };
 
