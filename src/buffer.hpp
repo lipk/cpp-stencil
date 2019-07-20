@@ -2,17 +2,33 @@
 
 #include <array>
 #include <loop.hpp>
+#include <type_traits>
 #include <typelist/typelist.hpp>
 #include <util.hpp>
 
 namespace stencil {
+template<u32 dim, typename T>
+class buffer;
+
+template<u32 rad, typename Func, u32 dim, typename T>
+void _iterate_impl(buffer<dim, T>& buf,
+                   const std::array<u64, dim>& from,
+                   const std::array<u64, dim>& to,
+                   T* cnt_init,
+                   const Func& func);
+
+template<u32 rad, typename Func, u32 dim, typename T>
+void iterate_halo(buffer<dim, T>& buf, const Func& func);
+
+template<u32 rad, u32 dim, typename T>
+class accessor;
 
 template<u32 dim, typename T>
 class buffer
     : not_copyable
     , not_movable /*TODO: make movable*/
 {
-    template<u32 rad>
+    template<u32, u32, typename>
     friend class accessor;
 
     const std::array<u64, dim> m_size, m_raw_size;
@@ -70,16 +86,16 @@ public:
         , m_data(_init_data(size, halo_size))
     {}
 
-    ~buffer() { delete m_data; }
+    ~buffer() { delete[] m_data; }
 
     inline T& get(const std::array<u64, dim>& coords)
     {
-        return this->m_data[_compute_index(coords, m_offset_with_halo)];
+        return m_data[_compute_index(coords, m_offset_with_halo)];
     }
 
-    inline const T& get(const std::array<u64, dim>& coords) const
+    inline T& get(const std::array<u64, dim>& coords) const
     {
-        return this->m_data[_compute_index(coords, m_offset_with_halo)];
+        return m_data[_compute_index(coords, m_offset_with_halo)];
     }
 
     inline T& get_raw(const std::array<u64, dim>& coords)
@@ -93,144 +109,29 @@ public:
     }
 
     const std::array<u64, dim>& size() const { return m_size; }
-
-    template<u32 rad>
-    class accessor
-    {
-        friend class buffer<dim, T>;
-        const std::array<i64, ipow(2 * rad + 1, dim)> m_offset_table;
-        T* m_middle;
-
-        inline static constexpr u64 _compute_table_index_impl(
-            const std::array<i64, dim>& coords,
-            u32 i)
-        {
-            return i == coords.size()
-                       ? 0
-                       : (ipow(2 * rad + 1, i) * (coords[i] + rad) +
-                          _compute_table_index_impl(coords, i + 1));
-        }
-
-        inline static constexpr u64 _compute_table_index(
-            const std::array<i64, dim>& coords)
-        {
-            return _compute_table_index_impl(coords, 0);
-        }
-
-        inline static std::array<i64, ipow(2 * rad + 1, dim)>
-        _init_offset_table(const std::array<u64, dim>& buffer_stride)
-        {
-            std::array<i64, dim> from;
-            from.fill(-static_cast<i64>(rad));
-            std::array<i64, dim> to;
-            to.fill(rad + 1);
-            std::array<i64, ipow(2 * rad + 1, dim)> table;
-            loop<dim, i64>(from, to, [&](const std::array<i64, dim>& it) {
-                u64 index = _compute_table_index(it);
-                table[index] = 0;
-                for (u32 i = 0; i < dim; ++i) {
-                    table[index] += it[i] * buffer_stride[i];
-                }
-            });
-            return table;
-        }
-        accessor(const std::array<u64, dim>& buffer_stride)
-            : m_offset_table(_init_offset_table(buffer_stride))
-        {}
-
-        inline void step(u64 n) { m_middle += n; }
-
-        inline void set_middle(T* middle) { m_middle = middle; }
-
-    public:
-        inline T& get(const std::array<i64, dim>& coords)
-        {
-            return *(m_middle + m_offset_table[_compute_table_index(coords)]);
-        }
-
-        inline const T& get(const std::array<i64, dim>& coords) const
-        {
-            return *(m_middle + m_offset_table[_compute_table_index(coords)]);
-        }
-    };
-
-private:
-    template<u32 rad, typename Func>
-    void _iterate(const std::array<u64, dim>& from,
-                  const std::array<u64, dim>& to,
-                  const std::array<u64, dim>& offset,
-                  const Func& func)
-    {
-        std::array<u64, dim> jumps;
-        jumps[0] = m_stride[0];
-        for (size_t i = 1; i < dim; ++i) {
-            jumps[i] = m_stride[i - 1] * (m_raw_size[i] - to[i] + from[i]);
-        }
-        accessor<rad> acc(m_stride);
-        loop_with_counter<dim, u64, T*, u64>(
-            from,
-            to,
-            m_data + _compute_index(from, offset),
-            jumps,
-            [&](std::array<u64, dim>& it, T* cnt) {
-                acc.set_middle(cnt);
-                func(it, acc);
-            });
-    }
-
-public:
-    template<u32 rad, typename Func>
-    void iterate(const Func& func)
-    {
-        _iterate<rad, Func>(
-            repeat<u64, dim>(0), m_size, m_offset_with_halo, func);
-    }
-
-    template<u32 rad, typename Func>
-    void iterate_halo(const Func& func)
-    {
-        _iterate<rad>(
-            repeat<u64, dim>(0),
-            m_raw_size,
-            repeat<u64, dim>(0),
-            [&](std::array<u64, dim>& it, buffer<dim, T>::accessor<rad>& acc) {
-                std::array<bool, dim> dir;
-                bool skip = true;
-                for (u32 i = 0; i < dim; ++i) {
-                    if (it[i] < m_halo_size) {
-                        dir[i] = false;
-                        skip = false;
-                    } else if (it[i] >= m_halo_size + m_size[i]) {
-                        dir[i] = true;
-                        skip = false;
-                    }
-                }
-                if (skip) {
-                    // TODO: skip whole rows
-                    return;
-                }
-                func(it, acc, dir);
-            });
-    }
+    const std::array<u64, dim>& size_with_halo() const { return m_raw_size; }
+    const std::array<u64, dim>& stride() const { return m_stride; }
+    u32 halo_size() const { return m_halo_size; }
 
     void fill_halo(const T& value)
     {
-        iterate_halo<0>([&](const std::array<u64, dim>&,
-                            buffer<dim, T>::accessor<0>& acc,
+        iterate_halo<0>(*this,
+                        [&](const std::array<u64, dim>&,
+                            accessor<0, dim, T>& acc,
                             const std::array<bool, dim>&) {
-            acc.get(repeat<i64, dim>(0)) = value;
-        });
+                            acc.get(repeat<i64, dim>(0)) = value;
+                        });
     }
 
     void fill(const T& value)
     {
-        _iterate<0>(
-            repeat<u64, dim>(0),
-            m_raw_size,
-            repeat<u64, dim>(0),
-            [&](std::array<u64, dim>&, buffer<dim, T>::accessor<0>& acc) {
-                acc.get({ 0, 0 }) = value;
-            });
+        _iterate_impl<0>(*this,
+                         repeat<u64, dim>(0),
+                         m_raw_size,
+                         &get_raw(repeat<u64, dim>(0)),
+                         [&](std::array<u64, dim>&, accessor<0, dim, T>& acc) {
+                             acc.get({ 0, 0 }) = value;
+                         });
     }
 
     void copy_halo_from(const buffer<dim, T>& other,
@@ -258,4 +159,126 @@ public:
         });
     }
 };
+
+template<u32 rad, u32 dim, typename T>
+class accessor
+{
+    friend class buffer<dim, T>;
+    const std::array<i64, ipow(2 * rad + 1, dim)> m_offset_table;
+    T* m_middle;
+
+    inline static constexpr u64 _compute_table_index_impl(
+        const std::array<i64, dim>& coords,
+        u32 i)
+    {
+        return i == coords.size() ? 0
+                                  : (ipow(2 * rad + 1, i) * (coords[i] + rad) +
+                                     _compute_table_index_impl(coords, i + 1));
+    }
+
+    inline static constexpr u64 _compute_table_index(
+        const std::array<i64, dim>& coords)
+    {
+        return _compute_table_index_impl(coords, 0);
+    }
+
+    inline static std::array<i64, ipow(2 * rad + 1, dim)> _init_offset_table(
+        const std::array<u64, dim>& buffer_stride)
+    {
+        std::array<i64, dim> from;
+        from.fill(-static_cast<i64>(rad));
+        std::array<i64, dim> to;
+        to.fill(rad + 1);
+        std::array<i64, ipow(2 * rad + 1, dim)> table;
+        loop<dim, i64>(from, to, [&](const std::array<i64, dim>& it) {
+            u64 index = _compute_table_index(it);
+            table[index] = 0;
+            for (u32 i = 0; i < dim; ++i) {
+                table[index] += it[i] * buffer_stride[i];
+            }
+        });
+        return table;
+    }
+
+public:
+    accessor(const std::array<u64, dim>& buffer_stride)
+        : m_offset_table(_init_offset_table(buffer_stride))
+    {}
+
+    inline void step(u64 n) { m_middle += n; }
+
+    inline void set_middle(T* middle) { m_middle = middle; }
+
+public:
+    inline T& get(const std::array<i64, dim>& coords)
+    {
+        return *(m_middle + m_offset_table[_compute_table_index(coords)]);
+    }
+
+    inline const T& get(const std::array<i64, dim>& coords) const
+    {
+        return *(m_middle + m_offset_table[_compute_table_index(coords)]);
+    }
+};
+
+template<u32 rad, typename Func, u32 dim, typename T>
+void _iterate_impl(buffer<dim, T>& buf,
+                   const std::array<u64, dim>& from,
+                   const std::array<u64, dim>& to,
+                   T* cnt_init,
+                   const Func& func)
+{
+    std::array<u64, dim> jumps;
+    const auto stride = buf.stride();
+    const auto raw_size = buf.size_with_halo();
+    jumps[0] = stride[0];
+    for (size_t i = 1; i < dim; ++i) {
+        jumps[i] = stride[i - 1] * (raw_size[i] - to[i] + from[i]);
+    }
+    accessor<rad, dim, T> acc(stride);
+    loop_with_counter<dim, u64, T*, u64>(
+        from, to, cnt_init, jumps, [&](std::array<u64, dim>& it, T* cnt) {
+            acc.set_middle(cnt);
+            func(it, acc);
+        });
+}
+
+template<u32 rad, typename Func, u32 dim, typename T>
+void iterate(buffer<dim, T>& buf, const Func& func)
+{
+    _iterate_impl<rad, Func, dim, T>(buf,
+                                     repeat<u64, dim>(0),
+                                     buf.size(),
+                                     &buf.get(repeat<u64, dim>(0)),
+                                     func);
+}
+
+template<u32 rad, typename Func, u32 dim, typename T>
+void iterate_halo(buffer<dim, T>& buf, const Func& func)
+{
+    auto wrapper = [&](std::array<u64, dim>& it, accessor<rad, dim, T>& acc) {
+        std::array<bool, dim> dir;
+        bool skip = true;
+        for (u32 i = 0; i < dim; ++i) {
+            if (it[i] < buf.halo_size()) {
+                dir[i] = false;
+                skip = false;
+            } else if (it[i] >= buf.halo_size() + buf.size()[i]) {
+                dir[i] = true;
+                skip = false;
+            }
+        }
+        if (skip) {
+            // TODO: skip whole rows
+            return;
+        }
+        func(it, acc, dir);
+    };
+    _iterate_impl<rad, decltype(wrapper), dim, T>(
+        buf,
+        repeat<u64, dim>(0),
+        buf.size_with_halo(),
+        &buf.get_raw(repeat<u64, dim>(0)),
+        wrapper);
+}
 }

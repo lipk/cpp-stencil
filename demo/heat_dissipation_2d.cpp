@@ -58,31 +58,33 @@ struct simulation
 #pragma omp parallel for
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
-            bufs[i]->iterate<1>([&](const std::array<u64, 2>& it,
-                                    buffer<2, double>::accessor<1>& acc) {
-                if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) <
-                    25) {
-                    acc.get({ 0, 0 }) = 1.0;
-                } else {
-                    acc.get({ 0, 0 }) =
-                        acc.get({ 0, 0 }) +
-                        0.1 * ((acc.get({ -1, 0 }) - 2 * acc.get({ 0, 0 }) +
-                                acc.get({ 1, 0 })) +
-                               (acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
-                                acc.get({ 0, 1 })));
-                }
-            });
+            iterate<1>(
+                *bufs[i],
+                [&](const std::array<u64, 2>& it, accessor<1, 2, double>& acc) {
+                    if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) <
+                        25) {
+                        acc.get({ 0, 0 }) = 1.0;
+                    } else {
+                        acc.get({ 0, 0 }) =
+                            acc.get({ 0, 0 }) +
+                            0.2 * ((acc.get({ -1, 0 }) - 2 * acc.get({ 0, 0 }) +
+                                    acc.get({ 1, 0 })) +
+                                   (acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
+                                    acc.get({ 0, 1 })));
+                    }
+                });
         }
 
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
-            bufs[i]->iterate<1>([&](const std::array<u64, 2>& it,
-                                    buffer<2, double>::accessor<1>& acc) {
-                int color = acc.get({ 0, 0 }) * 255;
-                SDL_SetRenderDrawColor(
-                    renderer, color, color, color, SDL_ALPHA_OPAQUE);
-                SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
-            });
+            iterate<1>(
+                *bufs[i],
+                [&](const std::array<u64, 2>& it, accessor<1, 2, double>& acc) {
+                    int color = acc.get({ 0, 0 }) * 255;
+                    SDL_SetRenderDrawColor(
+                        renderer, color, color, color, SDL_ALPHA_OPAQUE);
+                    SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
+                });
         }
 
         t = t + .02;

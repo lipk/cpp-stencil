@@ -46,18 +46,17 @@ TEST_CASE("read/write elements", "[buffer]")
 TEST_CASE("iterate", "[buffer]")
 {
     buffer<2, int> buf1({ 2, 2 }, 1);
-    buf1.iterate<1>(
-        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<1>& acc) {
-            acc.get({ -1, -1 }) = 1;
-            acc.get({ -1, 0 }) = 2;
-            acc.get({ -1, 1 }) = 3;
-            acc.get({ 0, -1 }) = 4;
-            acc.get({ 0, 0 }) = 5;
-            acc.get({ 0, 1 }) = 6;
-            acc.get({ 1, -1 }) = 7;
-            acc.get({ 1, 0 }) = 8;
-            acc.get({ 1, 1 }) = 9;
-        });
+    iterate<1>(buf1, [&](const std::array<u64, 2>&, accessor<1, 2, int>& acc) {
+        acc.get({ -1, -1 }) = 1;
+        acc.get({ -1, 0 }) = 2;
+        acc.get({ -1, 1 }) = 3;
+        acc.get({ 0, -1 }) = 4;
+        acc.get({ 0, 0 }) = 5;
+        acc.get({ 0, 1 }) = 6;
+        acc.get({ 1, -1 }) = 7;
+        acc.get({ 1, 0 }) = 8;
+        acc.get({ 1, 1 }) = 9;
+    });
     int values[4][4] = {
         { 1, 1, 2, 3 },
         { 1, 1, 2, 3 },
@@ -75,15 +74,15 @@ TEST_CASE("iterate", "[buffer]")
 TEST_CASE("iterate_halo", "[buffer]")
 {
     buffer<2, int> buf1({ 2, 2 }, 1);
-    buf1.iterate<0>(
-        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<0>& acc) {
-            acc.get({ 0, 0 }) = 1;
-        });
-    buf1.iterate_halo<0>([&](const std::array<u64, 2>&,
-                             buffer<2, int>::accessor<0>& acc,
-                             const std::array<bool, 2>&) {
-        acc.get({ 0, 0 }) = 2;
+    iterate<0>(buf1, [&](const std::array<u64, 2>&, accessor<0, 2, int>& acc) {
+        acc.get({ 0, 0 }) = 1;
     });
+    iterate_halo<0>(buf1,
+                    [&](const std::array<u64, 2>&,
+                        accessor<0, 2, int>& acc,
+                        const std::array<bool, 2>&) {
+                        acc.get({ 0, 0 }) = 2;
+                    });
     int values[4][4] = {
         { 2, 2, 2, 2 },
         { 2, 1, 1, 2 },
@@ -101,10 +100,9 @@ TEST_CASE("iterate_halo", "[buffer]")
 TEST_CASE("fill_halo", "[buffer]")
 {
     buffer<2, int> buf1({ 2, 2 }, 2);
-    buf1.iterate<0>(
-        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<0>& acc) {
-            acc.get({ 0, 0 }) = 1;
-        });
+    iterate<0>(buf1, [&](const std::array<u64, 2>&, accessor<0, 2, int>& acc) {
+        acc.get({ 0, 0 }) = 1;
+    });
     buf1.fill_halo(2);
     int values[6][6] = {
         { 2, 2, 2, 2, 2, 2 }, { 2, 2, 2, 2, 2, 2 }, { 2, 2, 1, 1, 2, 2 },
@@ -122,18 +120,17 @@ TEST_CASE("copy_halo", "[buffer]")
 {
     buffer<2, int> buf1({ 2, 2 }, 2);
     buffer<2, int> buf2({ 2, 2 }, 2);
-    buf1.iterate<0>(
-        [&](const std::array<u64, 2>& it, buffer<2, int>::accessor<0>& acc) {
-            if (it[0] == 0) {
-                acc.get({ 0, 0 }) = 0;
-            } else {
-                acc.get({ 0, 0 }) = 1;
-            }
-        });
-    buf2.iterate<0>(
-        [&](const std::array<u64, 2>&, buffer<2, int>::accessor<0>& acc) {
-            acc.get({ 0, 0 }) = 2;
-        });
+    iterate<0>(buf1,
+               [&](const std::array<u64, 2>& it, accessor<0, 2, int>& acc) {
+                   if (it[0] == 0) {
+                       acc.get({ 0, 0 }) = 0;
+                   } else {
+                       acc.get({ 0, 0 }) = 1;
+                   }
+               });
+    iterate<0>(buf2, [&](const std::array<u64, 2>&, accessor<0, 2, int>& acc) {
+        acc.get({ 0, 0 }) = 2;
+    });
     buf2.fill_halo(2);
 
     int values[6][6] = {
