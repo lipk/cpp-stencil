@@ -10,17 +10,17 @@ namespace stencil {
 template<u32 dim, typename T>
 class buffer;
 
-template<u32 rad, typename Func, u32 dim, typename T>
-void _iterate_impl(buffer<dim, T>& buf,
+template<u32 rad, typename Func, u32 dim, typename... T>
+void _iterate_impl(std::tuple<buffer<dim, T>&...>& buf,
                    const std::array<u64, dim>& from,
                    const std::array<u64, dim>& to,
-                   T* cnt_init,
+                   std::tuple<T*...> cnt_init,
                    const Func& func);
 
 template<u32 rad, typename Func, u32 dim, typename T>
 void iterate_halo(buffer<dim, T>& buf, const Func& func);
 
-template<u32 rad, u32 dim, typename T>
+template<u32 rad, u32 dim, typename... T>
 class accessor;
 
 template<u32 dim, typename T>
@@ -28,7 +28,7 @@ class buffer
     : not_copyable
     , not_movable /*TODO: make movable*/
 {
-    template<u32, u32, typename>
+    template<u32, u32, typename...>
     friend class accessor;
 
     const std::array<u64, dim> m_size, m_raw_size;
@@ -160,12 +160,14 @@ public:
     }
 };
 
-template<u32 rad, u32 dim, typename T>
+template<u32 rad, u32 dim, typename... T>
 class accessor
 {
-    friend class buffer<dim, T>;
+    template<u32, typename>
+    friend class buffer;
     const std::array<i64, ipow(2 * rad + 1, dim)> m_offset_table;
-    T* m_middle;
+    using data_types = tl::type_list<T...>;
+    tuple_counter<T*...> m_middle;
 
     inline static constexpr u64 _compute_table_index_impl(
         const std::array<i64, dim>& coords,
@@ -205,78 +207,70 @@ public:
         : m_offset_table(_init_offset_table(buffer_stride))
     {}
 
-    inline void step(u64 n) { m_middle += n; }
-
-    inline void set_middle(T* middle) { m_middle = middle; }
-
-public:
-    inline T& get(const std::array<i64, dim>& coords)
+    inline void set_middle(const std::tuple<T*...>& middle)
     {
-        return *(m_middle + m_offset_table[_compute_table_index(coords)]);
+        m_middle.values = middle;
     }
 
-    inline const T& get(const std::array<i64, dim>& coords) const
+    inline accessor<rad, dim, T...> operator+=(u64 inc)
     {
-        return *(m_middle + m_offset_table[_compute_table_index(coords)]);
+        m_middle += inc;
+        return *this;
+    }
+
+public:
+    template<u32 i = 0>
+    inline typename data_types::template get<i>& get(
+        const std::array<i64, dim>& coords)
+    {
+        return *(std::get<i>(m_middle.values) +
+                 m_offset_table[_compute_table_index(coords)]);
+    }
+
+    template<u32 i = 0>
+    inline const typename data_types::template get<i>& get(
+        const std::array<i64, dim>& coords) const
+    {
+        return *(std::get<i>(m_middle.values) +
+                 m_offset_table[_compute_table_index(coords)]);
     }
 };
 
-template<u32 rad, typename Func, u32 dim, typename T>
-void _iterate_impl(buffer<dim, T>& buf,
+template<u32 rad, typename Func, u32 dim, typename... T>
+void _iterate_impl(std::tuple<buffer<dim, T>&...>& buf,
                    const std::array<u64, dim>& from,
                    const std::array<u64, dim>& to,
-                   T* cnt_init,
+                   std::tuple<T*...> cnt_init,
                    const Func& func)
 {
     std::array<u64, dim> jumps;
-    const auto stride = buf.stride();
-    const auto raw_size = buf.size_with_halo();
+    const auto stride = std::get<0>(buf).stride();
+    const auto raw_size = std::get<0>(buf).size_with_halo();
     jumps[0] = stride[0];
     for (size_t i = 1; i < dim; ++i) {
         jumps[i] = stride[i - 1] * (raw_size[i] - to[i] + from[i]);
     }
-    accessor<rad, dim, T> acc(stride);
-    loop_with_counter<dim, u64, T*, u64>(
-        from, to, cnt_init, jumps, [&](std::array<u64, dim>& it, T* cnt) {
-            acc.set_middle(cnt);
-            func(it, acc);
+    accessor<rad, dim, T...> acc(stride);
+    acc.set_middle(cnt_init);
+    loop_with_counter<dim, u64, accessor<rad, dim, T...>, u64>(
+        from, to, acc, jumps, [&](std::array<u64, dim>& it, auto& cnt) {
+            func(it, cnt);
         });
 }
 
 template<u32 rad, typename Func, u32 dim, typename... T>
-void _iterate_multi_impl(std::tuple<buffer<dim, T>...>& buf,
-                         const std::array<u64, dim>& from,
-                         const std::array<u64, dim>& to,
-                         std::tuple<T*...> cnt_init,
-                         const Func& func)
+void iterate(const Func& func, buffer<dim, T>&... buf)
 {
-    std::array<u64, dim> jumps;
-    const auto stride = buf.stride();
-    const auto raw_size = buf.size_with_halo();
-    jumps[0] = stride[0];
-    for (size_t i = 1; i < dim; ++i) {
-        jumps[i] = stride[i - 1] * (raw_size[i] - to[i] + from[i]);
-    }
-    auto acc = std::make_tuple(accessor<rad, dim, T>(stride)...);
-    loop_with_counter<dim, u64, std::tuple<T*...>, u64>(
-        from,
-        to,
-        cnt_init,
-        jumps,
-        [&](std::array<u64, dim>& it, const std::tuple<T*...>& cnt) {
-            acc.set_middle(cnt);
-            func(it, acc);
-        });
-}
-
-template<u32 rad, typename Func, u32 dim, typename T>
-void iterate(buffer<dim, T>& buf, const Func& func)
-{
-    _iterate_impl<rad, Func, dim, T>(buf,
-                                     repeat<u64, dim>(0),
-                                     buf.size(),
-                                     &buf.get(repeat<u64, dim>(0)),
-                                     func);
+    auto bufs = std::tie(buf...);
+    auto size = std::get<0>(bufs).size();
+    auto cnt_init =
+        tl::type_list<T...>::template for_each_and_collect<std::tuple>(
+            [&](auto s) {
+                using S = decltype(s);
+                return &std::get<S::index>(bufs).get(repeat<u64, dim>(0));
+            });
+    _iterate_impl<rad, Func, dim, T...>(
+        bufs, repeat<u64, dim>(0), size, cnt_init, func);
 }
 
 template<u32 rad, typename Func, u32 dim, typename T>
@@ -300,11 +294,12 @@ void iterate_halo(buffer<dim, T>& buf, const Func& func)
         }
         func(it, acc, dir);
     };
+    auto bufs = std::tie(buf);
     _iterate_impl<rad, decltype(wrapper), dim, T>(
-        buf,
+        bufs,
         repeat<u64, dim>(0),
         buf.size_with_halo(),
-        &buf.get_raw(repeat<u64, dim>(0)),
+        std::make_tuple(&buf.get_raw(repeat<u64, dim>(0))),
         wrapper);
 }
 }

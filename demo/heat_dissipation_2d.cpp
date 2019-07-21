@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
-
 #define ASSERT_SDL(expr)                                                       \
     if (!(expr)) {                                                             \
         std::cerr << SDL_GetError() << std::endl;                              \
@@ -59,7 +58,6 @@ struct simulation
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
             iterate<1>(
-                *bufs[i],
                 [&](const std::array<u64, 2>& it, accessor<1, 2, double>& acc) {
                     if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) <
                         25) {
@@ -72,19 +70,19 @@ struct simulation
                                    (acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
                                     acc.get({ 0, 1 })));
                     }
-                });
+                }, *bufs[i]);
         }
 
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
             iterate<1>(
-                *bufs[i],
                 [&](const std::array<u64, 2>& it, accessor<1, 2, double>& acc) {
                     int color = acc.get({ 0, 0 }) * 255;
                     SDL_SetRenderDrawColor(
                         renderer, color, color, color, SDL_ALPHA_OPAQUE);
                     SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
-                });
+                },
+            *bufs[i]);
         }
 
         t = t + .02;

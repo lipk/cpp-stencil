@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <tuple>
 
 namespace stencil {
 using u8 = uint8_t;
