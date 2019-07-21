@@ -53,4 +53,38 @@ std::array<T, len> operator+(const std::array<T, len>& x,
     }
     return z;
 }
+
+template<typename... T>
+struct tuple_counter
+{
+    std::tuple<T...> values;
+};
+
+template<u32 index, typename T, typename... TS>
+struct _increment_tuple_counter_impl;
+
+template<typename T, typename... TS>
+struct _increment_tuple_counter_impl<0, T, TS...>
+{
+    static inline void increment(tuple_counter<TS...>&, T){};
+};
+
+template<u32 index, typename T, typename... TS>
+struct _increment_tuple_counter_impl
+{
+    static inline void increment(tuple_counter<TS...>& cnt, T inc)
+    {
+        std::get<index - 1>(cnt.values) += inc;
+        _increment_tuple_counter_impl<index - 1, T, TS...>::increment(cnt, inc);
+    }
+};
+
+template<typename T, typename... TS>
+tuple_counter<TS...>& operator+=(tuple_counter<TS...>& cnt, T inc)
+{
+    _increment_tuple_counter_impl<std::tuple_size<decltype(cnt.values)>::value,
+                                  T,
+                                  TS...>::increment(cnt, inc);
+    return cnt;
+}
 }

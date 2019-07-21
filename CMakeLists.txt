@@ -13,7 +13,8 @@ SET(DEMO_HEAT_DISSIPATION_SOURCES
 
 SET(TEST_SOURCES
     test/buffer.cpp
-    test/main.cpp)
+    test/main.cpp
+    test/util.cpp)
 
 INCLUDE_DIRECTORIES(src dep dep/catch/single_include)
 

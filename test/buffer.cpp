@@ -1,6 +1,5 @@
 #include <buffer.hpp>
 #include <catch2/catch.hpp>
-#include <iostream>
 
 namespace stencil {
 TEST_CASE("create", "[buffer]")

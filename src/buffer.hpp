@@ -243,6 +243,32 @@ void _iterate_impl(buffer<dim, T>& buf,
         });
 }
 
+template<u32 rad, typename Func, u32 dim, typename... T>
+void _iterate_multi_impl(std::tuple<buffer<dim, T>...>& buf,
+                         const std::array<u64, dim>& from,
+                         const std::array<u64, dim>& to,
+                         std::tuple<T*...> cnt_init,
+                         const Func& func)
+{
+    std::array<u64, dim> jumps;
+    const auto stride = buf.stride();
+    const auto raw_size = buf.size_with_halo();
+    jumps[0] = stride[0];
+    for (size_t i = 1; i < dim; ++i) {
+        jumps[i] = stride[i - 1] * (raw_size[i] - to[i] + from[i]);
+    }
+    auto acc = std::make_tuple(accessor<rad, dim, T>(stride)...);
+    loop_with_counter<dim, u64, std::tuple<T*...>, u64>(
+        from,
+        to,
+        cnt_init,
+        jumps,
+        [&](std::array<u64, dim>& it, const std::tuple<T*...>& cnt) {
+            acc.set_middle(cnt);
+            func(it, acc);
+        });
+}
+
 template<u32 rad, typename Func, u32 dim, typename T>
 void iterate(buffer<dim, T>& buf, const Func& func)
 {
