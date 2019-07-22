@@ -26,7 +26,7 @@ class accessor;
 template<u32 dim, typename T>
 class buffer
     : not_copyable
-    , not_movable /*TODO: make movable*/
+    , not_movable
 {
     template<u32, u32, typename...>
     friend class accessor;
@@ -34,7 +34,7 @@ class buffer
     const std::array<u64, dim> m_size, m_raw_size;
     const u32 m_halo_size;
     const std::array<u64, dim> m_stride, m_offset_with_halo;
-    T* const m_data;
+    T* m_data;
 
     static std::array<u64, dim> _init_raw_size(const std::array<u64, dim>& size,
                                                u32 halo_size)
@@ -85,6 +85,17 @@ public:
         , m_offset_with_halo(repeat<u64, dim>(halo_size))
         , m_data(_init_data(size, halo_size))
     {}
+
+    buffer(buffer<dim, T>&& other)
+        : m_size(other.m_size)
+        , m_raw_size(other.m_raw_size)
+        , m_halo_size(other.m_halo_size)
+        , m_stride(other.m_stride)
+        , m_offset_with_halo(other.m_offset_with_halo)
+        , m_data(other.m_data)
+    {
+        other.m_data = _init_data(m_size, m_halo_size);
+    }
 
     ~buffer() { delete[] m_data; }
 
@@ -302,4 +313,51 @@ void iterate_halo(buffer<dim, T>& buf, const Func& func)
         std::make_tuple(&buf.get_raw(repeat<u64, dim>(0))),
         wrapper);
 }
+
+template<u32 dim, typename... T>
+class buffer_set
+{
+    std::tuple<buffer<dim, T>...> m_buffers;
+
+public:
+    buffer_set(const std::array<u64, dim>& size, u32 halo_size)
+        : m_buffers(buffer<dim, T>(size, halo_size)...)
+    {}
+
+    template<typename... S>
+    struct subset_t
+    {
+        std::tuple<buffer<dim, T>...> buffers;
+
+        template<u32 rad, typename Func>
+        void iterate(const Func& func)
+        {
+            auto size = std::get<0>(buffers).size();
+            auto cnt_init =
+                tl::type_list<T...>::template for_each_and_collect<std::tuple>(
+                    [&](auto r) {
+                        using R = decltype(r);
+                        return &std::get<R::index>(buffers).get(
+                            repeat<u64, dim>(0));
+                    });
+            _iterate_impl<rad, Func, dim, T...>(
+                buffers, repeat<u64, dim>(0), size, cnt_init, func);
+        }
+    };
+
+    template<u32... indices>
+    auto subset()
+    {
+        typename tl::type_list<T...>::template keep<indices...>::template to<
+            subset_t>
+            bufs{ std::tie(std::get<indices>(m_buffers)...) };
+        return bufs;
+    }
+
+    template<u32 i>
+    auto& get()
+    {
+        return std::get<i>(m_buffers);
+    }
+};
 }

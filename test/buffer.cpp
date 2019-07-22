@@ -2,7 +2,7 @@
 #include <catch2/catch.hpp>
 
 namespace stencil {
-TEST_CASE("create", "[buffer]")
+TEST_CASE("create buffer", "[buffer]")
 {
     std::array<u64, 1> s1 = { 5 };
     buffer<1, int> b1(s1, 0);
@@ -167,5 +167,10 @@ TEST_CASE("copy_halo", "[buffer]")
             check_values();
         }
     }
+}
+
+TEST_CASE("create buffer_set", "[buffer_set]")
+{
+    buffer_set<2, int, int> bufs1({ 2, 2 }, 2);
 }
 }

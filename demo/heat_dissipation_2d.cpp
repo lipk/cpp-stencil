@@ -70,7 +70,8 @@ struct simulation
                                    (acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
                                     acc.get({ 0, 1 })));
                     }
-                }, *bufs[i]);
+                },
+                *bufs[i]);
         }
 
         for (size_t i = 0; i < 4; ++i) {
@@ -82,7 +83,7 @@ struct simulation
                         renderer, color, color, color, SDL_ALPHA_OPAQUE);
                     SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
                 },
-            *bufs[i]);
+                *bufs[i]);
         }
 
         t = t + .02;
