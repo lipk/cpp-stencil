@@ -136,13 +136,15 @@ public:
 
     void fill(const T& value)
     {
-        _iterate_impl<0>(*this,
+        auto tup = std::tie(*this);
+        auto func = [&](std::array<u64, dim>&, accessor<0, dim, T>& acc) {
+            acc.get({ 0, 0 }) = value;
+        };
+        _iterate_impl<0, decltype (func), dim, T>(tup,
                          repeat<u64, dim>(0),
                          m_raw_size,
-                         &get_raw(repeat<u64, dim>(0)),
-                         [&](std::array<u64, dim>&, accessor<0, dim, T>& acc) {
-                             acc.get({ 0, 0 }) = value;
-                         });
+                         std::make_tuple(&get_raw(repeat<u64, dim>(0))),
+                         func);
     }
 
     void copy_halo_from(const buffer<dim, T>& other,
@@ -327,7 +329,7 @@ public:
     template<typename... S>
     struct subset_t
     {
-        std::tuple<buffer<dim, T>...> buffers;
+        std::tuple<buffer<dim, S>&...> buffers;
 
         template<u32 rad, typename Func>
         void iterate(const Func& func)
@@ -340,8 +342,14 @@ public:
                         return &std::get<R::index>(buffers).get(
                             repeat<u64, dim>(0));
                     });
-            _iterate_impl<rad, Func, dim, T...>(
+            _iterate_impl<rad, Func, dim, S...>(
                 buffers, repeat<u64, dim>(0), size, cnt_init, func);
+        }
+
+        template<u32 i>
+        auto& get()
+        {
+            return std::get<i>(buffers);
         }
     };
 

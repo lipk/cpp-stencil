@@ -21,35 +21,47 @@ double distsq(double x1, double y1, double x2, double y2)
 
 struct simulation
 {
-    std::vector<buffer<2, double>*> bufs;
+    std::vector<buffer_set<2, double, double>*> bufs;
     double t;
+    u32 itercount;
 
     simulation()
         : t(0)
+        , itercount(0)
     {
         for (size_t i = 0; i < 4; ++i) {
             std::array<u64, 2> size = { 400, 400 };
-            bufs.push_back(new buffer<2, double>(size, 1));
+            bufs.push_back(new buffer_set<2, double, double>(size, 1));
+            bufs.back()->get<0>().fill(0.0);
+        }
+    }
+
+    buffer_set<2, double, double>::subset_t<double, double>
+    get_buffers_ordered(size_t i) {
+        if (itercount % 2 == 0) {
+            return bufs[i]->subset<0, 1>();
+        } else {
+            return bufs[i]->subset<1, 0>();
         }
     }
 
     void run_one_iteration(SDL_Renderer* renderer)
     {
-        bufs[0]->copy_halo_from(*bufs[1], { 1, 0 });
-        bufs[0]->copy_halo_from(*bufs[2], { 0, 1 });
-        bufs[0]->copy_halo_from(*bufs[3], { 1, 1 });
-
-        bufs[2]->copy_halo_from(*bufs[1], { 1, -1 });
-        bufs[2]->copy_halo_from(*bufs[0], { 0, -1 });
-        bufs[2]->copy_halo_from(*bufs[3], { 1, 0 });
-
-        bufs[1]->copy_halo_from(*bufs[0], { -1, 0 });
-        bufs[1]->copy_halo_from(*bufs[2], { -1, 1 });
-        bufs[1]->copy_halo_from(*bufs[3], { 0, 1 });
-
-        bufs[3]->copy_halo_from(*bufs[1], { 0, -1 });
-        bufs[3]->copy_halo_from(*bufs[2], { -1, 0 });
-        bufs[3]->copy_halo_from(*bufs[0], { -1, -1 });
+        std::vector<buffer_set<2, double, double>::subset_t<double, double>>
+                ord;
+        for (size_t i = 0; i<4; ++i) {
+            ord.emplace_back(get_buffers_ordered(i));
+        }
+        for (size_t i = 0; i<4; ++i) {
+            for (size_t j = 0; j<4; ++j) {
+                if (i == j) {
+                    continue;
+                }
+                i32 x = (j & 1) - (i & 1);
+                i32 y = ((j & 2) - (i & 2)) >> 1;;
+                ord[i].get<0>().copy_halo_from(ord[j].get<0>(), {x, y});
+            }
+        }
 
         double source_x = 400 + cos(t) * 300;
         double source_y = 400 + sin(t) * 300;
@@ -57,36 +69,35 @@ struct simulation
 #pragma omp parallel for
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
-            iterate<1>(
-                [&](const std::array<u64, 2>& it, accessor<1, 2, double>& acc) {
+            ord[i].iterate<1>(
+                [&](const std::array<u64, 2>& it, accessor<1, 2, double, double>& acc) {
                     if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) <
                         25) {
-                        acc.get({ 0, 0 }) = 1.0;
+                        acc.get<1>({ 0, 0 }) = 1.0;
                     } else {
-                        acc.get({ 0, 0 }) =
-                            acc.get({ 0, 0 }) +
-                            0.2 * ((acc.get({ -1, 0 }) - 2 * acc.get({ 0, 0 }) +
-                                    acc.get({ 1, 0 })) +
-                                   (acc.get({ 0, -1 }) - 2 * acc.get({ 0, 0 }) +
-                                    acc.get({ 0, 1 })));
+                        acc.get<1>({ 0, 0 }) =
+                            acc.get<0>({ 0, 0 }) +
+                            0.2 * ((acc.get<0>({ -1, 0 }) - 2 * acc.get<0>({ 0, 0 }) +
+                                    acc.get<0>({ 1, 0 })) +
+                                   (acc.get<0>({ 0, -1 }) - 2 * acc.get<0>({ 0, 0 }) +
+                                    acc.get<0>({ 0, 1 })));
                     }
-                },
-                *bufs[i]);
+                });
         }
 
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
-            iterate<1>(
-                [&](const std::array<u64, 2>& it, accessor<1, 2, double>& acc) {
-                    int color = acc.get({ 0, 0 }) * 255;
+            ord[i].iterate<1>(
+                [&](const std::array<u64, 2>& it, accessor<1, 2, double, double>& acc) {
+                    int color = acc.get<1>({ 0, 0 }) * 255;
                     SDL_SetRenderDrawColor(
                         renderer, color, color, color, SDL_ALPHA_OPAQUE);
                     SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
-                },
-                *bufs[i]);
+                });
         }
 
         t = t + .02;
+        itercount++;
     }
 };
 
