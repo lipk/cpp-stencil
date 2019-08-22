@@ -36,8 +36,9 @@ struct simulation
         }
     }
 
-    buffer_set<2, double, double>::subset_t<double, double>
-    get_buffers_ordered(size_t i) {
+    buffer_set<2, double, double>::subset_t<double, double> get_buffers_ordered(
+        size_t i)
+    {
         if (itercount % 2 == 0) {
             return bufs[i]->subset<0, 1>();
         } else {
@@ -48,18 +49,19 @@ struct simulation
     void run_one_iteration(SDL_Renderer* renderer)
     {
         std::vector<buffer_set<2, double, double>::subset_t<double, double>>
-                ord;
-        for (size_t i = 0; i<4; ++i) {
+            ord;
+        for (size_t i = 0; i < 4; ++i) {
             ord.emplace_back(get_buffers_ordered(i));
         }
-        for (size_t i = 0; i<4; ++i) {
-            for (size_t j = 0; j<4; ++j) {
+        for (size_t i = 0; i < 4; ++i) {
+            for (size_t j = 0; j < 4; ++j) {
                 if (i == j) {
                     continue;
                 }
                 i32 x = (j & 1) - (i & 1);
-                i32 y = ((j & 2) - (i & 2)) >> 1;;
-                ord[i].get<0>().copy_halo_from(ord[j].get<0>(), {x, y});
+                i32 y = ((j & 2) - (i & 2)) >> 1;
+                ;
+                ord[i].get<0>().copy_halo_from(ord[j].get<0>(), { x, y });
             }
         }
 
@@ -69,31 +71,32 @@ struct simulation
 #pragma omp parallel for
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
-            ord[i].iterate<1>(
-                [&](const std::array<u64, 2>& it, accessor<1, 2, double, double>& acc) {
-                    if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) <
-                        25) {
-                        acc.get<1>({ 0, 0 }) = 1.0;
-                    } else {
-                        acc.get<1>({ 0, 0 }) =
-                            acc.get<0>({ 0, 0 }) +
-                            0.2 * ((acc.get<0>({ -1, 0 }) - 2 * acc.get<0>({ 0, 0 }) +
-                                    acc.get<0>({ 1, 0 })) +
-                                   (acc.get<0>({ 0, -1 }) - 2 * acc.get<0>({ 0, 0 }) +
-                                    acc.get<0>({ 0, 1 })));
-                    }
-                });
+            ord[i].iterate<1>([&](const std::array<u64, 2>& it,
+                                  accessor<1, 2, double, double>& acc) {
+                if (distsq(source_x, source_y, it[0] + xoff, it[1] + yoff) <
+                    25) {
+                    acc.get<1>({ 0, 0 }) = 1.0;
+                } else {
+                    acc.get<1>({ 0, 0 }) =
+                        acc.get<0>({ 0, 0 }) +
+                        0.2 *
+                            ((acc.get<0>({ -1, 0 }) - 2 * acc.get<0>({ 0, 0 }) +
+                              acc.get<0>({ 1, 0 })) +
+                             (acc.get<0>({ 0, -1 }) - 2 * acc.get<0>({ 0, 0 }) +
+                              acc.get<0>({ 0, 1 })));
+                }
+            });
         }
 
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
-            ord[i].iterate<1>(
-                [&](const std::array<u64, 2>& it, accessor<1, 2, double, double>& acc) {
-                    int color = acc.get<1>({ 0, 0 }) * 255;
-                    SDL_SetRenderDrawColor(
-                        renderer, color, color, color, SDL_ALPHA_OPAQUE);
-                    SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
-                });
+            ord[i].iterate<1>([&](const std::array<u64, 2>& it,
+                                  accessor<1, 2, double, double>& acc) {
+                int color = acc.get<1>({ 0, 0 }) * 255;
+                SDL_SetRenderDrawColor(
+                    renderer, color, color, color, SDL_ALPHA_OPAQUE);
+                SDL_RenderDrawPoint(renderer, it[0] + xoff, it[1] + yoff);
+            });
         }
 
         t = t + .02;

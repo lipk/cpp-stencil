@@ -140,11 +140,12 @@ public:
         auto func = [&](std::array<u64, dim>&, accessor<0, dim, T>& acc) {
             acc.get({ 0, 0 }) = value;
         };
-        _iterate_impl<0, decltype (func), dim, T>(tup,
-                         repeat<u64, dim>(0),
-                         m_raw_size,
-                         std::make_tuple(&get_raw(repeat<u64, dim>(0))),
-                         func);
+        _iterate_impl<0, decltype(func), dim, T>(
+            tup,
+            repeat<u64, dim>(0),
+            m_raw_size,
+            std::make_tuple(&get_raw(repeat<u64, dim>(0))),
+            func);
     }
 
     void copy_halo_from(const buffer<dim, T>& other,
@@ -176,6 +177,7 @@ public:
 template<u32 rad, u32 dim, typename... T>
 class accessor
 {
+protected:
     template<u32, typename>
     friend class buffer;
     const std::array<i64, ipow(2 * rad + 1, dim)> m_offset_table;
@@ -231,7 +233,6 @@ public:
         return *this;
     }
 
-public:
     template<u32 i = 0>
     inline typename data_types::template get<i>& get(
         const std::array<i64, dim>& coords)

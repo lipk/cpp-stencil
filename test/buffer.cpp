@@ -173,4 +173,13 @@ TEST_CASE("create buffer_set", "[buffer_set]")
 {
     buffer_set<2, int, int> bufs1({ 2, 2 }, 2);
 }
+
+TEST_CASE("iterate buffer_set", "[buffer_set]")
+{
+    buffer_set<2, int, int> bufs1({ 2, 2 }, 2);
+    bufs1.subset<0, 1>().iterate<0>(
+        [&](const auto& /*it*/, accessor<0, 2, int, int>& acc) {
+            acc.get<0>({ 0, 0 }) = 1;
+        });
+}
 }
