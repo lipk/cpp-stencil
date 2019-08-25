@@ -8,23 +8,23 @@
 
 namespace stencil {
 template<u32 dim, typename T>
-class buffer;
+class grid;
 
 template<u32 rad, typename Func, u32 dim, typename... T>
-void _iterate_impl(std::tuple<buffer<dim, T>&...>& buf,
+void _iterate_impl(std::tuple<grid<dim, T>&...>& buf,
                    const std::array<u64, dim>& from,
                    const std::array<u64, dim>& to,
                    std::tuple<T*...> cnt_init,
                    const Func& func);
 
 template<u32 rad, typename Func, u32 dim, typename T>
-void iterate_halo(buffer<dim, T>& buf, const Func& func);
+void iterate_halo(grid<dim, T>& buf, const Func& func);
 
 template<u32 rad, u32 dim, typename... T>
 class accessor;
 
 template<u32 dim, typename T>
-class buffer
+class grid
     : not_copyable
     , not_movable
 {
@@ -77,7 +77,7 @@ class buffer
     }
 
 public:
-    buffer(const std::array<u64, dim>& size, u32 halo_size)
+    grid(const std::array<u64, dim>& size, u32 halo_size)
         : m_size(size)
         , m_raw_size(_init_raw_size(size, halo_size))
         , m_halo_size(halo_size)
@@ -86,7 +86,7 @@ public:
         , m_data(_init_data(size, halo_size))
     {}
 
-    buffer(buffer<dim, T>&& other)
+    grid(grid<dim, T>&& other)
         : m_size(other.m_size)
         , m_raw_size(other.m_raw_size)
         , m_halo_size(other.m_halo_size)
@@ -97,7 +97,7 @@ public:
         other.m_data = _init_data(m_size, m_halo_size);
     }
 
-    ~buffer() { delete[] m_data; }
+    ~grid() { delete[] m_data; }
 
     inline T& get(const std::array<u64, dim>& coords)
     {
@@ -148,7 +148,7 @@ public:
             func);
     }
 
-    void copy_halo_from(const buffer<dim, T>& other,
+    void copy_halo_from(const grid<dim, T>& other,
                         const std::array<i32, dim>& relpos)
     {
         // TODO: efficient implementation with counter loop
@@ -251,7 +251,7 @@ public:
 };
 
 template<u32 rad, typename Func, u32 dim, typename... T>
-void _iterate_impl(std::tuple<buffer<dim, T>&...>& buf,
+void _iterate_impl(std::tuple<grid<dim, T>&...>& buf,
                    const std::array<u64, dim>& from,
                    const std::array<u64, dim>& to,
                    std::tuple<T*...> cnt_init,
@@ -273,7 +273,7 @@ void _iterate_impl(std::tuple<buffer<dim, T>&...>& buf,
 }
 
 template<u32 rad, typename Func, u32 dim, typename... T>
-void iterate(const Func& func, buffer<dim, T>&... buf)
+void iterate(const Func& func, grid<dim, T>&... buf)
 {
     auto bufs = std::tie(buf...);
     auto size = std::get<0>(bufs).size();
@@ -288,7 +288,7 @@ void iterate(const Func& func, buffer<dim, T>&... buf)
 }
 
 template<u32 rad, typename Func, u32 dim, typename T>
-void iterate_halo(buffer<dim, T>& buf, const Func& func)
+void iterate_halo(grid<dim, T>& buf, const Func& func)
 {
     auto wrapper = [&](std::array<u64, dim>& it, accessor<rad, dim, T>& acc) {
         std::array<bool, dim> dir;
@@ -318,19 +318,21 @@ void iterate_halo(buffer<dim, T>& buf, const Func& func)
 }
 
 template<u32 dim, typename... T>
-class buffer_set
+class grid_set
+    : not_copyable
+    , not_movable
 {
-    std::tuple<buffer<dim, T>...> m_buffers;
+    std::tuple<grid<dim, T>...> m_buffers;
 
 public:
-    buffer_set(const std::array<u64, dim>& size, u32 halo_size)
-        : m_buffers(buffer<dim, T>(size, halo_size)...)
+    grid_set(const std::array<u64, dim>& size, u32 halo_size)
+        : m_buffers(grid<dim, T>(size, halo_size)...)
     {}
 
     template<typename... S>
     struct subset_t
     {
-        std::tuple<buffer<dim, S>&...> buffers;
+        std::tuple<grid<dim, S>&...> buffers;
 
         template<u32 rad, typename Func>
         void iterate(const Func& func)

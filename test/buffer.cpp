@@ -2,24 +2,24 @@
 #include <catch2/catch.hpp>
 
 namespace stencil {
-TEST_CASE("create buffer", "[buffer]")
+TEST_CASE("create grid", "[grid]")
 {
     std::array<u64, 1> s1 = { 5 };
-    buffer<1, int> b1(s1, 0);
+    grid<1, int> b1(s1, 0);
     CHECK(b1.size() == s1);
 
     std::array<u64, 3> s2 = { 5, 10, 15 };
-    buffer<3, int> b2(s2, 2);
+    grid<3, int> b2(s2, 2);
     CHECK(b2.size() == s2);
 
     std::array<u64, 10> s3 = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-    buffer<10, int> b3(s3, 1);
+    grid<10, int> b3(s3, 1);
     CHECK(b3.size() == s3);
 }
 
-TEST_CASE("read/write elements", "[buffer]")
+TEST_CASE("read/write elements", "[grid]")
 {
-    buffer<2, int> buf1({ 5, 5 }, 0);
+    grid<2, int> buf1({ 5, 5 }, 0);
     buf1.get({ 0, 0 }) = 10;
     buf1.get({ 4, 4 }) = 11;
     buf1.get({ 3, 2 }) = 12;
@@ -30,7 +30,7 @@ TEST_CASE("read/write elements", "[buffer]")
     CHECK(buf1.get({ 3, 2 }) == 12);
     CHECK(buf1.get_raw({ 3, 2 }) == 12);
 
-    buffer<2, int> buf2({ 5, 5 }, 1);
+    grid<2, int> buf2({ 5, 5 }, 1);
     buf2.get({ 0, 0 }) = 10;
     buf2.get({ 4, 4 }) = 11;
     buf2.get({ 3, 2 }) = 12;
@@ -42,9 +42,9 @@ TEST_CASE("read/write elements", "[buffer]")
     CHECK(buf2.get_raw({ 4, 3 }) == 12);
 }
 
-TEST_CASE("iterate", "[buffer]")
+TEST_CASE("iterate", "[grid]")
 {
-    buffer<2, int> buf1({ 2, 2 }, 1);
+    grid<2, int> buf1({ 2, 2 }, 1);
     iterate<1>(
         [&](const std::array<u64, 2>&, accessor<1, 2, int>& acc) {
             acc.get({ -1, -1 }) = 1;
@@ -71,9 +71,9 @@ TEST_CASE("iterate", "[buffer]")
         }
     }
 }
-TEST_CASE("iterate_halo", "[buffer]")
+TEST_CASE("iterate_halo", "[grid]")
 {
-    buffer<2, int> buf1({ 2, 2 }, 1);
+    grid<2, int> buf1({ 2, 2 }, 1);
     iterate<0>(
         [&](const std::array<u64, 2>&, accessor<0, 2, int>& acc) {
             acc.get({ 0, 0 }) = 1;
@@ -99,9 +99,9 @@ TEST_CASE("iterate_halo", "[buffer]")
     }
 }
 
-TEST_CASE("fill_halo", "[buffer]")
+TEST_CASE("fill_halo", "[grid]")
 {
-    buffer<2, int> buf1({ 2, 2 }, 2);
+    grid<2, int> buf1({ 2, 2 }, 2);
     iterate<0>(
         [&](const std::array<u64, 2>&, accessor<0, 2, int>& acc) {
             acc.get({ 0, 0 }) = 1;
@@ -120,10 +120,10 @@ TEST_CASE("fill_halo", "[buffer]")
     }
 }
 
-TEST_CASE("copy_halo", "[buffer]")
+TEST_CASE("copy_halo", "[grid]")
 {
-    buffer<2, int> buf1({ 2, 2 }, 2);
-    buffer<2, int> buf2({ 2, 2 }, 2);
+    grid<2, int> buf1({ 2, 2 }, 2);
+    grid<2, int> buf2({ 2, 2 }, 2);
     iterate<0>(
         [&](const std::array<u64, 2>& it, accessor<0, 2, int>& acc) {
             if (it[0] == 0) {
@@ -169,14 +169,14 @@ TEST_CASE("copy_halo", "[buffer]")
     }
 }
 
-TEST_CASE("create buffer_set", "[buffer_set]")
+TEST_CASE("create grid_set", "[grid_set]")
 {
-    buffer_set<2, int, int> bufs1({ 2, 2 }, 2);
+    grid_set<2, int, int> bufs1({ 2, 2 }, 2);
 }
 
-TEST_CASE("iterate buffer_set", "[buffer_set]")
+TEST_CASE("iterate grid_set", "[grid_set]")
 {
-    buffer_set<2, int, int> bufs1({ 2, 2 }, 2);
+    grid_set<2, int, int> bufs1({ 2, 2 }, 2);
     bufs1.subset<0, 1>().iterate<0>(
         [&](const auto& /*it*/, accessor<0, 2, int, int>& acc) {
             acc.get<0>({ 0, 0 }) = 1;

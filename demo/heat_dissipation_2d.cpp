@@ -21,7 +21,7 @@ double distsq(double x1, double y1, double x2, double y2)
 
 struct simulation
 {
-    std::vector<buffer_set<2, double, double>*> bufs;
+    std::vector<grid_set<2, double, double>*> bufs;
     double t;
     u32 itercount;
 
@@ -31,12 +31,12 @@ struct simulation
     {
         for (size_t i = 0; i < 4; ++i) {
             std::array<u64, 2> size = { 400, 400 };
-            bufs.push_back(new buffer_set<2, double, double>(size, 1));
+            bufs.push_back(new grid_set<2, double, double>(size, 1));
             bufs.back()->get<0>().fill(0.0);
         }
     }
 
-    buffer_set<2, double, double>::subset_t<double, double> get_buffers_ordered(
+    grid_set<2, double, double>::subset_t<double, double> get_buffers_ordered(
         size_t i)
     {
         if (itercount % 2 == 0) {
@@ -48,8 +48,7 @@ struct simulation
 
     void run_one_iteration(SDL_Renderer* renderer)
     {
-        std::vector<buffer_set<2, double, double>::subset_t<double, double>>
-            ord;
+        std::vector<grid_set<2, double, double>::subset_t<double, double>> ord;
         for (size_t i = 0; i < 4; ++i) {
             ord.emplace_back(get_buffers_ordered(i));
         }
