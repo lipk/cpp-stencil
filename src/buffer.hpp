@@ -24,17 +24,66 @@ template<u32 rad, u32 dim, typename... T>
 class accessor;
 
 template<u32 dim, typename T>
-class grid
-    : not_copyable
-    , not_movable
+class buffer : not_copyable
+{
+    const std::array<u64, dim> m_size;
+    const std::array<u64, dim> m_stride;
+    T* m_data;
+
+    static T* _init_data(const std::array<u64, dim>& size)
+    {
+        u64 buffer_length = 1;
+        for (u32 i = 0; i < dim; ++i) {
+            buffer_length *= size[i];
+        }
+        return new T[buffer_length];
+    }
+
+    static std::array<u64, dim> _init_stride(const std::array<u64, dim>& size)
+    {
+        std::array<u64, dim> result;
+        result[0] = 1;
+        for (u32 i = 1; i < dim; ++i) {
+            result[i] = result[i - 1] * (size[i - 1]);
+        }
+        return result;
+    }
+
+public:
+    buffer(const std::array<u64, dim>& size)
+        : m_size(size)
+        , m_stride(_init_stride(size))
+        , m_data(_init_data(size))
+    {}
+
+    buffer(buffer<dim, T>&& other)
+        : m_size(other.m_size)
+        , m_stride(other.m_stride)
+        , m_data(other.m_data)
+    {
+        other.m_data = nullptr;
+    }
+
+    ~buffer() { delete m_data; }
+
+    inline const std::array<u64, dim>& stride() const { return m_stride; }
+
+    inline const T& get(u64 index) const { return m_data[index]; }
+
+    inline T& get(u64 index) { return m_data[index]; }
+};
+
+template<u32 dim, typename T>
+class grid : not_copyable
 {
     template<u32, u32, typename...>
     friend class accessor;
 
     const std::array<u64, dim> m_size, m_raw_size;
     const u32 m_halo_size;
-    const std::array<u64, dim> m_stride, m_offset_with_halo;
-    T* m_data;
+    const std::array<u64, dim> m_offset_with_halo;
+    const u64 m_start_offset;
+    buffer<dim, T>* m_buffer;
 
     static std::array<u64, dim> _init_raw_size(const std::array<u64, dim>& size,
                                                u32 halo_size)
@@ -71,57 +120,64 @@ class grid
     {
         u64 result = coords[0] + offset[0];
         for (u32 i = 1; i < dim; ++i) {
-            result += m_stride[i] * (coords[i] + offset[i]);
+            result += m_buffer->stride()[i] * (coords[i] + offset[i]);
         }
         return result;
     }
 
 public:
-    grid(const std::array<u64, dim>& size, u32 halo_size)
+    grid(const std::array<u64, dim>& size,
+         u32 halo_size,
+         const std::array<u64, dim>& position,
+         buffer<dim, T>* buffer)
         : m_size(size)
         , m_raw_size(_init_raw_size(size, halo_size))
         , m_halo_size(halo_size)
-        , m_stride(_init_offset(size, halo_size))
         , m_offset_with_halo(repeat<u64, dim>(halo_size))
-        , m_data(_init_data(size, halo_size))
+        , m_start_offset(_compute_index(position, repeat<u64, dim>(0)))
+        , m_buffer(buffer)
     {}
 
     grid(grid<dim, T>&& other)
         : m_size(other.m_size)
         , m_raw_size(other.m_raw_size)
         , m_halo_size(other.m_halo_size)
-        , m_stride(other.m_stride)
         , m_offset_with_halo(other.m_offset_with_halo)
-        , m_data(other.m_data)
+        , m_start_offset(other.m_start_offset)
+        , m_buffer(other.m_buffer)
     {
-        other.m_data = _init_data(m_size, m_halo_size);
+        other.m_buffer = nullptr;
     }
 
-    ~grid() { delete[] m_data; }
+    ~grid() {}
 
     inline T& get(const std::array<u64, dim>& coords)
     {
-        return m_data[_compute_index(coords, m_offset_with_halo)];
+        return m_buffer->get(m_start_offset +
+                             _compute_index(coords, m_offset_with_halo));
     }
 
     inline T& get(const std::array<u64, dim>& coords) const
     {
-        return m_data[_compute_index(coords, m_offset_with_halo)];
+        return m_buffer->get(m_start_offset +
+                             _compute_index(coords, m_offset_with_halo));
     }
 
     inline T& get_raw(const std::array<u64, dim>& coords)
     {
-        return m_data[_compute_index(coords, repeat<u64, dim>(0))];
+        return m_buffer->get(m_start_offset +
+                             _compute_index(coords, repeat<u64, dim>(0)));
     }
 
     inline const T& get_raw(const std::array<u64, dim>& coords) const
     {
-        return m_data[_compute_index(coords, repeat<dim, u64>(0))];
+        return m_buffer->get(m_start_offset +
+                             _compute_index(coords, repeat<dim, u64>(0)));
     }
 
     const std::array<u64, dim>& size() const { return m_size; }
     const std::array<u64, dim>& size_with_halo() const { return m_raw_size; }
-    const std::array<u64, dim>& stride() const { return m_stride; }
+    const std::array<u64, dim>& stride() const { return m_buffer->stride(); }
     u32 halo_size() const { return m_halo_size; }
 
     void fill_halo(const T& value)
@@ -318,41 +374,72 @@ void iterate_halo(grid<dim, T>& buf, const Func& func)
 }
 
 template<u32 dim, typename... T>
-class grid_set
-    : not_copyable
-    , not_movable
+class buffer_set : not_copyable
 {
-    std::tuple<grid<dim, T>...> m_buffers;
+    std::tuple<buffer<dim, T>...> m_buffers;
 
 public:
-    grid_set(const std::array<u64, dim>& size, u32 halo_size)
-        : m_buffers(grid<dim, T>(size, halo_size)...)
+    buffer_set(const std::array<u64, dim>& size)
+        : m_buffers(std::make_tuple(buffer<dim, T>(size)...))
+    {}
+
+    buffer_set(buffer_set<dim, T...>&& other)
+        : m_buffers(std::move(other.m_buffers))
+    {}
+
+    template<u32 i>
+    auto& get()
+    {
+        return std::get<i>(m_buffers);
+    }
+};
+
+template<u32 dim, typename... T>
+class grid_set : not_copyable
+{
+    std::tuple<grid<dim, T>...> m_grids;
+
+public:
+    grid_set(const std::array<u64, dim>& size,
+             u32 halo_size,
+             const std::array<u64, dim>& position,
+             buffer_set<dim, T...>& buffers)
+        : m_grids(
+              tl::type_list<T...>::template for_each_and_collect<std::tuple>(
+                  [&](auto t) {
+                      using item_type = decltype(t);
+                      return grid<dim, typename item_type::type>(
+                          size,
+                          halo_size,
+                          position,
+                          &buffers.template get<item_type::index>());
+                  }))
     {}
 
     template<typename... S>
     struct subset_t
     {
-        std::tuple<grid<dim, S>&...> buffers;
+        std::tuple<grid<dim, S>&...> grids;
 
         template<u32 rad, typename Func>
         void iterate(const Func& func)
         {
-            auto size = std::get<0>(buffers).size();
+            auto size = std::get<0>(grids).size();
             auto cnt_init =
                 tl::type_list<T...>::template for_each_and_collect<std::tuple>(
                     [&](auto r) {
                         using R = decltype(r);
-                        return &std::get<R::index>(buffers).get(
+                        return &std::get<R::index>(grids).get(
                             repeat<u64, dim>(0));
                     });
             _iterate_impl<rad, Func, dim, S...>(
-                buffers, repeat<u64, dim>(0), size, cnt_init, func);
+                grids, repeat<u64, dim>(0), size, cnt_init, func);
         }
 
         template<u32 i>
         auto& get()
         {
-            return std::get<i>(buffers);
+            return std::get<i>(grids);
         }
     };
 
@@ -361,14 +448,14 @@ public:
     {
         typename tl::type_list<T...>::template keep<indices...>::template to<
             subset_t>
-            bufs{ std::tie(std::get<indices>(m_buffers)...) };
+            bufs{ std::tie(std::get<indices>(m_grids)...) };
         return bufs;
     }
 
     template<u32 i>
     auto& get()
     {
-        return std::get<i>(m_buffers);
+        return std::get<i>(m_grids);
     }
 };
 }
