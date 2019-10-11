@@ -21,7 +21,7 @@ double distsq(double x1, double y1, double x2, double y2)
 
 struct simulation
 {
-    std::vector<buffer_set<2, double, double>> bufs;
+    std::vector<buffer_set<2, double, double>*> bufs;
     std::vector<grid_set<2, double, double>*> grids;
     double t;
     u32 itercount;
@@ -33,9 +33,9 @@ struct simulation
         for (size_t i = 0; i < 4; ++i) {
             std::array<u64, 2> bufsize = { 402, 402 };
             std::array<u64, 2> gridsize = { 400, 400 };
-            bufs.emplace_back<buffer_set<2, double, double>>(bufsize);
+            bufs.push_back(new buffer_set<2, double, double>(bufsize));
             grids.push_back(new grid_set<2, double, double>(
-                gridsize, 1, { 1, 1 }, bufs[i]));
+                gridsize, 1, { 1, 1 }, *bufs[i]));
             grids.back()->get<0>().fill(0.0);
         }
     }

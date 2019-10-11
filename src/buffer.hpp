@@ -6,6 +6,8 @@
 #include <typelist/typelist.hpp>
 #include <util.hpp>
 
+#include <iostream>
+
 namespace stencil {
 template<u32 dim, typename T>
 class grid;
@@ -82,8 +84,8 @@ class grid : not_copyable
     const std::array<u64, dim> m_size, m_raw_size;
     const u32 m_halo_size;
     const std::array<u64, dim> m_offset_with_halo;
-    const u64 m_start_offset;
     buffer<dim, T>* m_buffer;
+    const u64 m_start_offset;
 
     static std::array<u64, dim> _init_raw_size(const std::array<u64, dim>& size,
                                                u32 halo_size)
@@ -134,8 +136,8 @@ public:
         , m_raw_size(_init_raw_size(size, halo_size))
         , m_halo_size(halo_size)
         , m_offset_with_halo(repeat<u64, dim>(halo_size))
-        , m_start_offset(_compute_index(position, repeat<u64, dim>(0)))
         , m_buffer(buffer)
+        , m_start_offset(_compute_index(position, repeat<u64, dim>(0)))
     {}
 
     grid(grid<dim, T>&& other)
@@ -143,8 +145,8 @@ public:
         , m_raw_size(other.m_raw_size)
         , m_halo_size(other.m_halo_size)
         , m_offset_with_halo(other.m_offset_with_halo)
-        , m_start_offset(other.m_start_offset)
         , m_buffer(other.m_buffer)
+        , m_start_offset(other.m_start_offset)
     {
         other.m_buffer = nullptr;
     }
@@ -165,14 +167,12 @@ public:
 
     inline T& get_raw(const std::array<u64, dim>& coords)
     {
-        return m_buffer->get(m_start_offset +
-                             _compute_index(coords, repeat<u64, dim>(0)));
+        return m_buffer->get(_compute_index(coords, repeat<u64, dim>(0)));
     }
 
     inline const T& get_raw(const std::array<u64, dim>& coords) const
     {
-        return m_buffer->get(m_start_offset +
-                             _compute_index(coords, repeat<dim, u64>(0)));
+        return m_buffer->get(_compute_index(coords, repeat<dim, u64>(0)));
     }
 
     const std::array<u64, dim>& size() const { return m_size; }
