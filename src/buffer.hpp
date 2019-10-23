@@ -83,9 +83,8 @@ class grid : not_copyable
 
     const std::array<u64, dim> m_size, m_raw_size;
     const u32 m_halo_size;
-    const std::array<u64, dim> m_offset_with_halo;
     buffer<dim, T>* m_buffer;
-    const u64 m_start_offset;
+    const u64 m_start_offset, m_raw_start_offset;
 
     static std::array<u64, dim> _init_raw_size(const std::array<u64, dim>& size,
                                                u32 halo_size)
@@ -117,12 +116,11 @@ class grid : not_copyable
         return new T[buffer_length];
     }
 
-    inline u64 _compute_index(const std::array<u64, dim>& coords,
-                              const std::array<u64, dim>& offset) const
+    inline u64 _compute_index(const std::array<u64, dim>& coords) const
     {
-        u64 result = coords[0] + offset[0];
+        u64 result = coords[0];
         for (u32 i = 1; i < dim; ++i) {
-            result += m_buffer->stride()[i] * (coords[i] + offset[i]);
+            result += m_buffer->stride()[i] * coords[i];
         }
         return result;
     }
@@ -135,18 +133,19 @@ public:
         : m_size(size)
         , m_raw_size(_init_raw_size(size, halo_size))
         , m_halo_size(halo_size)
-        , m_offset_with_halo(repeat<u64, dim>(halo_size))
         , m_buffer(buffer)
-        , m_start_offset(_compute_index(position, repeat<u64, dim>(0)))
+        , m_start_offset(_compute_index(position))
+        , m_raw_start_offset(
+              _compute_index(position - repeat<u64, dim>(halo_size)))
     {}
 
     grid(grid<dim, T>&& other)
         : m_size(other.m_size)
         , m_raw_size(other.m_raw_size)
         , m_halo_size(other.m_halo_size)
-        , m_offset_with_halo(other.m_offset_with_halo)
         , m_buffer(other.m_buffer)
         , m_start_offset(other.m_start_offset)
+        , m_raw_start_offset(other.m_raw_start_offset)
     {
         other.m_buffer = nullptr;
     }
@@ -155,24 +154,23 @@ public:
 
     inline T& get(const std::array<u64, dim>& coords)
     {
-        return m_buffer->get(m_start_offset +
-                             _compute_index(coords, m_offset_with_halo));
+        return m_buffer->get(m_start_offset + _compute_index(coords));
     }
 
-    inline T& get(const std::array<u64, dim>& coords) const
+    inline const T& get(const std::array<u64, dim>& coords) const
     {
-        return m_buffer->get(m_start_offset +
-                             _compute_index(coords, m_offset_with_halo));
+        return m_buffer->get(m_start_offset + _compute_index(coords));
     }
 
     inline T& get_raw(const std::array<u64, dim>& coords)
     {
-        return m_buffer->get(_compute_index(coords, repeat<u64, dim>(0)));
+        return m_buffer->get(m_raw_start_offset + _compute_index(coords));
     }
 
     inline const T& get_raw(const std::array<u64, dim>& coords) const
     {
-        return m_buffer->get(_compute_index(coords, repeat<dim, u64>(0)));
+        return m_buffer->get(m_raw_start_offset +
+                             _compute_index(coords, repeat<u64, dim>(0)));
     }
 
     const std::array<u64, dim>& size() const { return m_size; }
@@ -204,29 +202,29 @@ public:
             func);
     }
 
-    void copy_halo_from(const grid<dim, T>& other,
-                        const std::array<i32, dim>& relpos)
+    void copy_halo_from(grid<dim, T>& other, const std::array<i32, dim>& relpos)
     {
         // TODO: efficient implementation with counter loop
-        std::array<u64, dim> to, from_src, from_dst;
+        std::array<u64, dim> len, from_src, from_dst;
         for (u32 i = 0; i < dim; ++i) {
             if (relpos[i] < 0) {
-                to[i] = other.m_halo_size;
+                len[i] = other.m_halo_size;
                 from_src[i] = other.m_size[i] - other.m_halo_size;
                 from_dst[i] = 0;
             } else if (relpos[i] == 0) {
-                to[i] = other.m_size[i];
+                len[i] = other.m_size[i];
                 from_src[i] = 0;
                 from_dst[i] = m_halo_size;
             } else {
-                to[i] = other.m_halo_size;
+                len[i] = other.m_halo_size;
                 from_src[i] = 0;
                 from_dst[i] = m_raw_size[i] - m_halo_size;
             }
         }
-        loop<dim>(repeat<u64, dim>(0), to, [&](const std::array<u64, dim>& it) {
-            get_raw(from_dst + it) = other.get(from_src + it);
-        });
+        loop<dim>(
+            repeat<u64, dim>(0), len, [&](const std::array<u64, dim>& it) {
+                get_raw(from_dst + it) = other.get(from_src + it);
+            });
     }
 };
 

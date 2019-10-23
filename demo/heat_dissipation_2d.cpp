@@ -63,7 +63,6 @@ struct simulation
                 }
                 i32 x = (j & 1) - (i & 1);
                 i32 y = ((j & 2) - (i & 2)) >> 1;
-                ;
                 ord[i].get<0>().copy_halo_from(ord[j].get<0>(), { x, y });
             }
         }
@@ -71,7 +70,6 @@ struct simulation
         double source_x = 400 + cos(t) * 300;
         double source_y = 400 + sin(t) * 300;
 
-#pragma omp parallel for
         for (size_t i = 0; i < 4; ++i) {
             u64 xoff = 400 * (i & 1), yoff = 400 * ((i & 2) >> 1);
             ord[i].iterate<1>([&](const std::array<u64, 2>& it,

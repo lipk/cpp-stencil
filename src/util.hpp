@@ -55,6 +55,17 @@ std::array<T, len> operator+(const std::array<T, len>& x,
     return z;
 }
 
+template<typename T, u64 len>
+std::array<T, len> operator-(const std::array<T, len>& x,
+                             const std::array<T, len>& y)
+{
+    std::array<T, len> z;
+    for (u32 i = 0; i < len; ++i) {
+        z[i] = x[i] - y[i];
+    }
+    return z;
+}
+
 template<typename... T>
 struct tuple_counter
 {
